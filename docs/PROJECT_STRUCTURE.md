@@ -1,9 +1,15 @@
 # Project structure
 
 TransitInk OS keeps the standard PlatformIO source layout while separating
-hardware-independent behaviour from device and network integration. The current
-product is TTC-only: the live transit path is `TtcClient` -> `TtcProvider` ->
-`WidgetProviderRouter` -> `WidgetScheduler` -> `EInkDisplay`.
+hardware-independent behaviour from device and network integration.
+
+This repository is a **TTC edition** derived from the original Hong Kong
+TransitInk OS project. The dashboard shell, board profile, portal security
+model, and sleep/wake lifecycle are intentionally close to upstream. The live
+transit path is TTC-only:
+
+`TtcClient` -> `TtcProvider` -> `WidgetProviderRouter` -> `WidgetScheduler` ->
+`EInkDisplay`.
 
 ## Directory map
 

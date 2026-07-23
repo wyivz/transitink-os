@@ -1,5 +1,9 @@
 # Development
 
+This guide is for the **TTC edition** of TransitInk OS (see the root
+[README](../README.md)). The build/test/flash workflow matches the upstream
+project; the live transit path and catalog tooling are TTC-specific.
+
 ## Prerequisites
 
 - macOS or Linux with Bash
@@ -74,7 +78,12 @@ The scripts also accept `ESP32_PORT`, `ESP32_BAUD`, `ESP32_CHIP`,
 variables. A serial port must be passed explicitly or supplied through
 `ESP32_PORT`; the remaining defaults preserve the Zectrix Note 4 workflow.
 
-## Regenerate the Traditional Chinese glyph table
+## Regenerate the bitmap glyph table
+
+The TTC English edition keeps a slim Latin-focused seed. The glyph pipeline still uses the historical `generate_hk_glyph_font.py` name and
+vendored Noto Sans CJK HK font files. In this TTC edition the product UI is
+English, but the same generator remains the supported way to rebuild the
+embedded bitmap table used by the e-ink renderer.
 
 `scripts/generate_hk_glyph_font.py` scans production source plus the deterministic
 seed in `scripts/hk_glyph_seed.txt`. It rasterises the pinned Noto Sans CJK HK

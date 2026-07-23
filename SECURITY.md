@@ -21,10 +21,10 @@ available.
 
 - First-time setup uses a temporary access point with a new random 12-character
   WPA2 password shown on the e-paper display. Once normal Wi-Fi is connected,
-  pressing the physical Volume button opens the portal on the device's LAN IP
-  instead. The portal remains available until settings are saved, the device is
-  restarted, or Volume is pressed again. It is not served continuously during
-  normal dashboard use.
+  pressing the physical Volume Up button opens the English settings portal on
+  the device's LAN IP instead. The portal remains available until settings are
+  saved, the device is restarted, or Volume Up is pressed again. It is not
+  served continuously during normal dashboard use.
 - LAN portal URLs contain a random per-session capability path in the on-device
   QR code. Portal API requests also require the expected local interface and
   host, the capability token, same-origin mutating requests, and the per-session

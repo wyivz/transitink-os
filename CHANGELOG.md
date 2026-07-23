@@ -2,6 +2,21 @@
 
 All notable user-visible changes to TransitInk OS will be documented here.
 
+## Unreleased — TTC edition
+
+- Converted the web installer, devices catalog, and no-port dialog to English for TTC users.
+- Slimmed the embedded glyph table to Latin UI characters (about 100 glyphs).
+- Removed Traditional Chinese installer/dialog copy and Hong Kong widget marketing text.
+- Converted the product to a Toronto TTC-only arrival dashboard while retaining
+  the original four-slot e-ink shell, Wi-Fi setup flow, and sleep/wake model.
+- Replaced Hong Kong operator clients and catalogs with on-device GTFS-Realtime
+  Trip Updates filtering against `https://bustime.ttc.ca/gtfsrt/trips`.
+- Switched the settings portal and dashboard chrome to English.
+- Embedded a reduced TTC Surface GTFS catalog under `data/catalog/ttc/` for
+  route/stop selection.
+- Removed remote weather fetching; the footer layout remains for compatibility.
+- Documented provenance relative to the upstream Hong Kong project.
+
 ## 1.0.2 - 2026-07-23
 
 - Added an optional daily automatic wake window, including schedules which

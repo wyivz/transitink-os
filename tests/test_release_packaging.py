@@ -121,10 +121,11 @@ class ReleasePackagingTests(unittest.TestCase):
         page = (ROOT / "installer" / "index.html").read_text(encoding="utf-8")
         app = (ROOT / "installer" / "app.js").read_text(encoding="utf-8")
         self.assertIn('manifest="./manifest.json"', page)
-        self.assertIn("刷機風險與備份責任", page)
-        self.assertIn("安裝工具不會自動備份原有韌體", page)
-        self.assertIn("風險與責任由使用者承擔", page)
-        self.assertIn("與 Zectrix 沒有從屬或認可關係", page)
+        self.assertIn("Flash risk and backup responsibility", page)
+        self.assertIn("This installer does not automatically back up existing firmware", page)
+        self.assertIn("remain with the user", page)
+        self.assertIn("not affiliated with or endorsed by", page)
+        self.assertIn("Zectrix", page)
         self.assertIn('./legal/THIRD_PARTY_NOTICES.md', page)
         self.assertIn('./legal/THIRD_PARTY_DATA.md', page)
         self.assertIn('fetch("./devices.json"', app)
@@ -134,7 +135,7 @@ class ReleasePackagingTests(unittest.TestCase):
         )
         self.assertNotIn("unpkg.com", page)
         no_port_dialog = (
-            ROOT / "installer" / "esp-web-tools" / "no-port-dialog-zh.js"
+            ROOT / "installer" / "esp-web-tools" / "no-port-dialog-en.js"
         ).read_text(encoding="utf-8")
         install_button = (
             ROOT / "installer" / "esp-web-tools" / "vendor" / "install-button.js"
@@ -142,6 +143,10 @@ class ReleasePackagingTests(unittest.TestCase):
         self.assertNotIn("unpkg.com", no_port_dialog)
         self.assertTrue(no_port_dialog.startswith("// Modified by TransitInk OS"))
         self.assertTrue(install_button.startswith("// Modified by TransitInk OS"))
+        self.assertIn("no-port-dialog-en.js", install_button)
+        self.assertFalse(
+            (ROOT / "installer" / "esp-web-tools" / "no-port-dialog-zh.js").exists()
+        )
 
     def test_project_documents_non_endorsement_and_image_provenance(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -151,7 +156,9 @@ class ReleasePackagingTests(unittest.TestCase):
         )
         self.assertRegex(readme, r"not affiliated\s+with or endorsed by Zectrix")
         for document in (notices, image_source):
-            self.assertIn("與 Zectrix 沒有從屬或認可關係", document)
+            self.assertRegex(
+                document, r"not affiliated\s+with or endorsed by Zectrix"
+            )
         self.assertIn("1050ddeb3e6be7f435df4df760a7d13e5", image_source)
         self.assertIn("AI-assisted product visual", image_source)
 
