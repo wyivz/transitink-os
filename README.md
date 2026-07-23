@@ -12,7 +12,7 @@ TransitInk OS is an independent source-available project and is not affiliated w
 ## Relationship to the original project
 
 This firmware is a **Toronto**-focused derivative of the excellent original **[TransitInk OS](https://github.com/Zerie55699/transitink-os) (Hong Kong)** 
-created by **[@Zerie55699](https://github.com/Zerie55699)**. Huge thanks to the original author for making this project open-source!
+created by **[@Zerie55699](https://github.com/Zerie55699)**. Huge thanks to the original author for publishing this source-available work!
 
 | | Original project | This edition |
 | --- | --- | --- |
