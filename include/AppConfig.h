@@ -18,7 +18,6 @@ struct DeviceConfig {
     uint16_t schemaVersion = transitink::kConfigSchemaVersion;
     String wifiSsid;
     String wifiPassword;
-    String weatherLocationTc = "香港天文台";
     bool sleepEnabled = SLEEP_ENABLED_DEFAULT;
     uint16_t wakeDurationMinutes = SLEEP_WAKE_DEFAULT_MINUTES;
     uint16_t sleepMaintenanceHours = SLEEP_MAINTENANCE_DEFAULT_HOURS;

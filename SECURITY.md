@@ -29,8 +29,8 @@ available.
   QR code. Portal API requests also require the expected local interface and
   host, the capability token, same-origin mutating requests, and the per-session
   CSRF token.
-- Official transit, journey-time, and weather HTTPS requests verify the server
-  hostname and certificate chain against the pinned Hongkong Post Root CA 3.
+- Official TTC GTFS-Realtime HTTPS requests verify the server hostname and
+  certificate chain against the pinned GlobalSign Root CA - R3.
 - The web installer serves its fixed ESP Web Tools copy from the same origin,
   applies a restrictive Content Security Policy, and release workflows publish
   SHA-256 checksums plus GitHub build-provenance attestations.

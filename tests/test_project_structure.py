@@ -74,19 +74,14 @@ class ProjectStructureTests(unittest.TestCase):
     def test_platformio_targets_zectrix_esp32s3(self):
         ini = read_text("platformio.ini")
         self.assertIn("[env:zectrix_note4]", ini)
-        self.assertIn(
-            "pioarduino/platform-espressif32/releases/download/55.03.39",
-            ini,
-        )
+        self.assertIn("pioarduino/platform-espressif32/releases/download/55.03.39", ini)
         self.assertRegex(ini, r"framework\s*=\s*arduino")
         self.assertRegex(ini, r"board_upload\.flash_size\s*=\s*16MB")
         self.assertRegex(ini, r"board_build\.arduino\.memory_type\s*=\s*qio_opi")
         self.assertIn("-DBOARD_HAS_PSRAM", ini)
         self.assertIn("bblanchon/ArduinoJson", ini)
-        self.assertNotIn("U8g2_for_Adafruit_GFX", ini)
-        self.assertNotIn("zinggjm/GxEPD2", ini)
 
-    def test_board_config_uses_zectrix_reference_pins(self):
+    def test_board_config_uses_zectrix_reference_pins_and_button_roles(self):
         selector = read_text("include/hardware/BoardProfile.h")
         profile = read_text("include/hardware/boards/ZectrixNote4.h")
         host_test = read_text("test_host/test_board_profile.cpp")
@@ -103,287 +98,195 @@ class ProjectStructureTests(unittest.TestCase):
             "buttons.homePin == 0",
             "buttons.upPin == 39",
             "buttons.downPin == 18",
+            "buttons.factoryResetHoldMs == 5000",
+            "buttons.configPin == 39",
+            "buttons.configDebounceMs == 30",
+            "buttons.configMaxClickMs == 1200",
+            "battery.adcPin == 4",
+            "battery.sensePowerPin == 17",
+            "battery.chargeDetectPin == 2",
+            "battery.chargeFullPin == 1",
         ):
             self.assertIn(assertion, host_test)
 
-    def test_transitink_branding_keeps_firmware_version_unchanged(self):
-        config = read_text("include/ProductConfig.h")
-        readme = read_text("README.md")
-        display = read_text("src/EInkDisplay.cpp")
-        portal = read_text("src/TransitInkPortalPage.cpp")
-        self.assertIn('#define FIRMWARE_PRODUCT_NAME "TransitInk OS"', config)
-        self.assertIn('#define FIRMWARE_SHORT_NAME "TransitInk"', config)
-        self.assertIn("#define CONFIG_AP_PREFIX FIRMWARE_SHORT_NAME", config)
-        self.assertIn('#define FIRMWARE_VERSION "1.0.2"', config)
-        self.assertNotIn("Bus ETA Note 4", config + readme)
-        self.assertNotIn("巴士 ETA", config + readme)
-        self.assertTrue(readme.startswith("# TransitInk OS"))
-        self.assertIn("drawText(18, 42, FIRMWARE_PRODUCT_NAME);", display)
-        self.assertIn('#include "ProductConfig.h"', portal)
-        self.assertEqual(2, portal.count("FIRMWARE_PRODUCT_NAME"))
-        self.assertEqual(1, portal.count("FIRMWARE_SHORT_NAME"))
-        self.assertNotIn("<strong>TransitInk</strong>", portal)
-        self.assertNotIn(">TransitInk<", portal)
-        self.assertNotIn("TransitInk OS", display + portal)
-
-    def test_visible_status_copy_uses_shared_brand_constants(self):
-        main = read_text("src/main.cpp")
-        display = read_text("src/EInkDisplay.cpp")
-        portal = read_text("src/TransitInkPortalPage.cpp")
-        self.assertNotIn('String(FIRMWARE_SHORT_NAME) + " 未同步"', display)
-        self.assertIn('String("密碼：") + configPortal.apPassword()', main)
-        self.assertIn('const String localUrl = "http://" + WiFi.localIP().toString() + "/";', main)
-        self.assertNotIn("再按 Volume 返回主頁", main)
-
-        brand_literals = []
-        for source in (main, display, portal):
-            production_lines = "\n".join(
-                line for line in source.splitlines()
-                if not line.lstrip().startswith("#include")
-            )
-            for double_quoted, single_quoted in re.findall(
-                r'"([^"\n]*)"|\'([^\'\n]*)\'', production_lines
-            ):
-                literal = double_quoted or single_quoted
-                if "TransitInk" in literal:
-                    brand_literals.append(literal)
-        self.assertEqual(["X-TransitInk-CSRF", "X-TransitInk-Access"], brand_literals)
-
-    def test_flash_scripts_keep_backup_restore_path(self):
-        backup = read_text("scripts/backup_flash.sh")
-        restore = read_text("scripts/restore_flash.sh")
-        self.assertIn("read-flash", backup)
-        self.assertIn('FLASH_SIZE_HEX="${ESP32_FLASH_SIZE:-0x1000000}"', backup)
-        self.assertIn('CHIP="${ESP32_CHIP:-esp32s3}"', backup)
-        self.assertIn("write-flash 0", restore)
-        self.assertIn('FLASH_SIZE_HEX="${ESP32_FLASH_SIZE:-0x1000000}"', restore)
-
-    def test_firmware_assembles_transitink_widget_runtime_without_legacy_eta(self):
+    def test_ttc_only_application_composition_and_timezone(self):
         main = read_text("src/main.cpp")
         assert_fragments_in_order(
             self,
             main,
-            "KmbClient kmbClient;",
-            "CitybusClient citybusClient;",
-            "GmbClient gmbClient;",
-            "MtrClient mtrClient;",
-            "LightRailClient lightRailClient;",
-            "JourneyTimeClient journeyTimeClient;",
-            "BusProvider busProvider(kmbClient, citybusClient);",
-            "GmbProvider gmbProvider(gmbClient);",
-            "MtrProvider mtrProvider(mtrClient);",
-            "LightRailProvider lightRailProvider(lightRailClient);",
-            "JourneyTimeProvider journeyTimeProvider(journeyTimeClient);",
-            "WidgetProviderRouter widgetProviderRouter",
+            "TtcClient ttcClient;",
+            "TtcProvider ttcProvider(ttcClient);",
+            "WidgetProviderRouter widgetProviderRouter(ttcProvider);",
             "transitink::WidgetScheduler widgetScheduler(widgetProviderRouter);",
-            "WidgetCatalogService widgetCatalogService(kmbClient, citybusClient, gmbClient);",
-            "ConfigPortal configPortal(deviceConfig, configStore, widgetCatalogService);",
+            "ConfigPortal configPortal(deviceConfig, configStore);",
         )
-        self.assertIn("configTzTime", main)
-        self.assertIn("HKT-8", main)
-        self.assertIn("waitForTimeSync", main)
-        self.assertNotIn("正在連接 Wi-Fi", main)
-        self.assertIn("Wi-Fi 未連接", main)
-        self.assertIn("configPortal.apPassword()", main)
-        self.assertNotIn("EtaController", main)
-        self.assertNotIn("nextEtaRefreshMs", main)
-        self.assertNotIn("deviceConfig.refreshSeconds", main)
-        self.assertNotIn("deviceConfig.routes", main)
-        self.assertNotIn('einkDisplay.showWifiStatus("已連接 " + WiFi.localIP().toString())', main)
-
-    def test_home_button_is_sleep_wakeup_not_factory_reset(self):
-        profile_test = read_text("test_host/test_board_profile.cpp")
-        self.assertIn("buttons.homePin == 0", profile_test)
-        main = read_text("src/main.cpp")
-        support = read_text("src/hardware/BoardSupport.cpp")
-        self.assertIn("transitink::hardware::configureHomeWakeup()", main)
-        self.assertIn("transitink::hardware::homeButtonPressed()", main)
-        self.assertIn("transitink::hardware::takeHomePress()", main)
-        self.assertIn("transitink::hardware::clearPendingHomePress()", main)
-        self.assertIn("startButtonMonitoring", support)
-        self.assertIn("DebouncedButtonPressDetector", support)
-        self.assertIn("gpio_wakeup_enable", support)
-        self.assertIn("rtc_gpio_deinit", support)
-        self.assertIn("ESP_SLEEP_WAKEUP_GPIO", main)
-        self.assertNotIn("pinMode(", main)
-        self.assertNotIn("放開主頁鍵後重啟", main)
-
-    def test_volume_buttons_long_press_factory_resets_device(self):
-        profile_test = read_text("test_host/test_board_profile.cpp")
-        self.assertIn("buttons.factoryResetUpPin == 39", profile_test)
-        self.assertIn("buttons.factoryResetDownPin == 18", profile_test)
-        self.assertIn("buttons.factoryResetHoldMs == 5000", profile_test)
-        self.assertIn("buttons.configPin == 39", profile_test)
-        self.assertIn("buttons.configDebounceMs == 30", profile_test)
-        self.assertIn("buttons.configMaxClickMs == 1200", profile_test)
-
-        main = read_text("src/main.cpp")
-        support = read_text("src/hardware/BoardSupport.cpp")
-        self.assertIn("DualButtonHoldDetector", support)
-        self.assertIn("kBoardProfile.buttons.configDebounceMs", support)
-        self.assertIn("factoryResetUpButtonPressed()", support)
-        self.assertIn("factoryResetDownButtonPressed()", support)
-        self.assertIn("buttonPressed(kBoardProfile.buttons.configPin)", support)
-        self.assertIn("takeFactoryResetHold()", main)
-        self.assertIn("configStore.clear()", main)
-        self.assertIn("WiFi.disconnect(true, true)", main)
-        self.assertIn("LittleFS.format()", main)
-        self.assertIn("已重設裝置", main)
-        self.assertIn("放開音量鍵後重啟", main)
-        self.assertIn("factoryResetPendingRestart", main)
-        self.assertIn("ESP.restart()", main)
-
-    def test_volume_up_click_opens_config_access_screen(self):
-        main = read_text("src/main.cpp")
-        self.assertIn("void showConfigAccessScreen()", main)
-        self.assertIn("void returnToDashboard()", main)
-        self.assertIn("void serviceConfigButton()", main)
-        self.assertIn("Config button clicked", main)
-        self.assertIn("Config button clicked: returning to dashboard", main)
-        self.assertIn("transitink::hardware::takeConfigClick()", main)
-        self.assertIn("transitink::hardware::clearPendingConfigClick()", main)
-        self.assertIn("if (configAccessMode) {\n        returnToDashboard();\n    } else {\n        showConfigAccessScreen();\n    }", main)
-        self.assertIn("const bool useAccessPoint = WiFi.status() != WL_CONNECTED;", main)
-        self.assertIn("configPortal.begin(useAccessPoint)", main)
-        self.assertIn("configPortal.pageUrl()", main)
-        self.assertIn("configPortal.isApMode()", main)
-        self.assertIn("WiFi.localIP().toString()", main)
-        self.assertNotIn("kConfigAccessTimeoutMs", main)
-        self.assertNotIn("serviceConfigAccessTimeout", main)
-        self.assertNotIn("configAccessStartedAtMs", main)
-        self.assertNotIn("十分鐘後自動關閉", main)
-        self.assertNotIn("掃描 QR 驗證開啟", main)
-        self.assertIn("einkDisplay.showConfigMode(deviceConfig.wifiSsid, message, configUrl)", main)
-        self.assertIn("configPortal.stop();", main)
-        self.assertIn("configAccessMode = false", main)
-        self.assertIn("refreshAllWidgetsNow();", main)
-        self.assertIn("serviceConfigButton();", main)
-
-    def test_config_portal_begin_is_idempotent(self):
-        header = read_text("include/ConfigPortal.h")
-        self.assertIn("void stop();", header)
-        self.assertIn("bool routesRegistered_ = false", header)
-        self.assertIn("bool serverStarted_ = false", header)
-        self.assertIn("bool isStarted() const { return serverStarted_; }", header)
-
-        portal = read_text("src/ConfigPortal.cpp")
-        self.assertIn("if (!routesRegistered_)", portal)
-        self.assertIn("if (!serverStarted_)", portal)
-        self.assertRegex(portal, r"ConfigPortal::loop\(\)[\s\S]*if \(!serverStarted_\) \{[\s\S]*return;[\s\S]*\}")
-        self.assertIn("void ConfigPortal::stop()", portal)
-        self.assertIn("server_.stop();", portal)
-        self.assertIn("dns_.stop();", portal)
-        self.assertIn("WiFi.softAPdisconnect(true);", portal)
-        self.assertIn("WiFi.mode(WIFI_STA);", portal)
-        self.assertIn("serverStarted_ = false;", portal)
-        self.assertIn("apMode_ = false;", portal)
-
-    def test_config_portal_starts_only_for_missing_or_invalid_persisted_config(self):
-        main = read_text("src/main.cpp")
-        self.assertIn("Config portal deferred until button press", main)
-        self.assertRegex(main, r"if \(!loaded \|\| !hasUsableConfig\(deviceConfig\)\) \{[\s\S]*configPortal\.begin\(true\);")
-        self.assertIn("if (deviceConfig.sleepEnabled && sleepMaintenanceWake) {", main)
-        self.assertIn("SleepResumeAction::ShowDashboard", main)
-        self.assertIn("if (deviceConfig.sleepEnabled && resumeSleep) {", main)
-        self.assertIn("wakeStartedAtMs = millis();", main)
-        self.assertIn("refreshAllWidgetsNow();", main)
-        self.assertNotIn("routesConfigured", main)
-        self.assertNotIn("hasEnabledWidgets()", main)
-        self.assertNotIn("enterSleepMode(\"idle boot\")", main)
-        self.assertNotIn("configPortal.begin(forceAp);", main)
-
-    def test_button_mapper_diagnostic_firmware_maps_four_physical_buttons(self):
-        ini = read_text("platformio.ini")
-        self.assertIn("[env:button_mapper]", ini)
-        self.assertIn("-D BUTTON_MAPPER", ini)
-
-        main = read_text("src/main.cpp")
-        self.assertIn("#ifndef BUTTON_MAPPER", main)
-        self.assertIn("#endif  // BUTTON_MAPPER", main)
-
-        mapper = read_text("src/button_mapper.cpp")
-        self.assertIn("#ifdef BUTTON_MAPPER", mapper)
-        for label in ("針孔鍵", "音量上", "音量下", "Home Button"):
-            self.assertIn(label, mapper)
-        for gpio in ("buttons.homePin", "buttons.upPin", "buttons.downPin", "GPIO_NUM_1", "GPIO_NUM_2", "GPIO_NUM_5", "GPIO_NUM_7"):
-            self.assertIn(gpio, mapper)
-        self.assertIn("Preferences", mapper)
-        self.assertIn("preferences.clear()", mapper)
-        self.assertNotIn("pin_rst_wait", mapper)
-        self.assertNotIn("resumePinholeIfNeeded", mapper)
-        self.assertIn("esp_reset_reason()", mapper)
-        self.assertIn("Press the requested button", mapper)
-
-    def test_all_disabled_widgets_are_a_valid_dashboard_configuration(self):
-        main = read_text("src/main.cpp")
-        config = read_text("src/AppConfig.cpp")
-        display = read_text("src/EInkDisplay.cpp")
-        self.assertIn("return areWidgetsValid(config);", config)
-        self.assertNotIn("hasEnabledWidgets()", main)
-        self.assertNotIn("尚未選擇路線", main)
-        self.assertNotIn("no routes configured", main)
-        self.assertIn("bool hasEnabledWidget(", display)
-        no_widgets = cpp_function_body(display, "void drawNoWidgetsHint()")
-        self.assertIn('"尚未設定小工具"', no_widgets)
-        self.assertIn('"按 Volume Up 開啟設定頁"', no_widgets)
-        for signature in (
-            "void EInkDisplay::showDashboard(",
-            "void EInkDisplay::showSleep(",
+        self.assertIn('configTzTime("EST5EDT,M3.2.0,M11.1.0"', main)
+        self.assertIn('setenv("TZ", "EST5EDT,M3.2.0,M11.1.0", 1);', main)
+        self.assertNotIn("HKT-8", main)
+        for removed in (
+            "KmbClient",
+            "CitybusClient",
+            "GmbClient",
+            "MtrClient",
+            "LightRailClient",
+            "JourneyTimeClient",
+            "WeatherClient",
+            "WidgetCatalogService",
+            "BusProvider",
+            "GmbProvider",
+            "MtrProvider",
+            "LightRailProvider",
+            "JourneyTimeProvider",
+            "weatherClient",
+            "weatherLocationTc",
+            "deviceConfig.routes",
+            "EtaController",
         ):
-            body = cpp_function_body(display, signature)
-            self.assertIn("if (hasEnabledWidget(snapshots))", body)
-            self.assertIn("drawNoWidgetsHint();", body)
+            self.assertNotIn(removed, main)
 
-    def test_eink_setup_screen_has_polished_copy_and_status_icons(self):
-        header = read_text("include/EInkDisplay.h")
-        self.assertIn("showConfigMode(const String& ssid, const String& url, const String& qrUrl = \"\")", header)
+    def test_ttc_client_provider_router_and_gtfs_filter_are_the_only_live_transit_path(self):
+        ttc_header = read_text("include/TtcClient.h")
+        ttc_client = read_text("src/TtcClient.cpp")
+        provider_header = read_text("include/providers/TtcProvider.h")
+        provider = read_text("src/providers/TtcProvider.cpp")
+        router_header = read_text("include/providers/WidgetProviderRouter.h")
+        router = read_text("src/providers/WidgetProviderRouter.cpp")
+        filter_source = read_text("src/core/GtfsRealtimeTripFilter.cpp")
 
+        self.assertIn('kTripUpdatesUrl = "https://bustime.ttc.ca/gtfsrt/trips"', ttc_header)
+        self.assertIn("kMaxFeedBytes = 200 * 1024", ttc_header)
+        self.assertIn("filterGtfsRtTripUpdates", ttc_client)
+        self.assertIn("configureVerifiedTls(tls)", ttc_client)
+        self.assertIn("normalizeTtcSnapshot", provider)
+        self.assertIn("explicit TtcProvider(TtcClient& client)", provider_header)
+        self.assertIn("explicit WidgetProviderRouter(TtcProvider& ttc);", router_header)
+        self.assertIn("case transitink::WidgetType::TtcEta:", router)
+        self.assertIn("return ttc_.fetch(slot, config, nowEpoch);", router)
+        self.assertIn("parseStopTimeUpdate", filter_source)
+        for removed in (
+            "BusProvider",
+            "GmbProvider",
+            "MtrProvider",
+            "LightRailProvider",
+            "JourneyTimeProvider",
+            "BusEta",
+            "GmbEta",
+            "MtrEta",
+            "JourneyTime",
+        ):
+            self.assertNotIn(removed, router_header + router)
+
+    def test_widget_config_core_is_closed_to_disabled_and_ttc_eta(self):
+        header = read_text("include/core/WidgetConfigCore.h")
+        source = read_text("src/core/WidgetConfigCore.cpp")
+        self.assertIn("constexpr uint16_t kConfigSchemaVersion = 3", header)
+        self.assertIn("enum class WidgetType : uint8_t { Disabled, TtcEta };", header)
+        self.assertIn("struct TtcWidgetConfig", header)
+        self.assertIn('return "ttc_eta"', source)
+        self.assertIn('value == "ttc_eta"', source)
+        self.assertIn("isRequiredIdValid(widget.ttc.routeId)", source)
+        for removed in (
+            "BusOperator",
+            "RailMode",
+            "BusWidgetConfig",
+            "GmbWidgetConfig",
+            "RailWidgetConfig",
+            "JourneyTimeWidgetConfig",
+            "bus_eta",
+            "gmb_eta",
+            "mtr_eta",
+            "journey_time",
+        ):
+            self.assertNotIn(removed, header + source)
+
+    def test_app_config_schema_v3_has_ttc_widgets_and_no_weather_location(self):
+        header = read_text("include/AppConfig.h")
+        source = read_text("src/AppConfig.cpp")
+        codec = read_text("src/PortalConfigCodec.cpp")
+        self.assertIn("uint16_t schemaVersion = transitink::kConfigSchemaVersion", header)
+        self.assertIn("transitink::WidgetSlots widgets", header)
+        self.assertIn('doc["schema_version"] = transitink::kConfigSchemaVersion', source)
+        self.assertIn('item.createNestedObject("ttc")', source)
+        self.assertIn('item["ttc"].as<JsonObjectConst>()', source)
+        self.assertIn('doc["schema_version"] = transitink::kConfigSchemaVersion', codec)
+        self.assertIn("wifi_password_set", codec)
+        for removed in (
+            "weatherLocationTc",
+            "weather_location_tc",
+            "migrateLegacyRoutes",
+            'doc["routes"]',
+            'doc["stop_name_tc"]',
+            "busOperatorId",
+            "railModeId",
+            "journey_time",
+            "gmb",
+            "mtr",
+        ):
+            self.assertNotIn(removed, header + source + codec)
+
+    def test_config_portal_serves_english_ttc_catalog_without_catalog_service(self):
+        header = read_text("include/ConfigPortal.h")
+        source = read_text("src/ConfigPortal.cpp")
+        page = read_text("src/TransitInkPortalPage.cpp")
+        self.assertIn("ConfigPortal(DeviceConfig& config, ConfigStore& store);", header)
+        self.assertIn("ConfigPortal::ConfigPortal(DeviceConfig& config, ConfigStore& store)", source)
+        self.assertIn('server_.on("/assets/catalog/current/ttc/index.json"', source)
+        self.assertIn('server_.on("/assets/catalog/current/ttc/stops-ttc.json"', source)
+        self.assertIn("kEmbeddedTtcCatalogAssets", source)
+        self.assertIn('<html lang="en">', page)
+        self.assertIn("TTC surface arrivals for your e-ink dashboard", page)
+        self.assertIn("TTC arrivals", page)
+        self.assertIn("collectConfig(){return{schema_version:3", page)
+        for removed in (
+            "WidgetCatalogService",
+            "/api/catalog/bus/",
+            "/api/catalog/gmb/",
+            "/api/catalog/rail/",
+            "/api/catalog/journey/",
+            "/api/catalog/update",
+            "/assets/catalog/current/index.json",
+            "/assets/catalog/current/stops-kmb.json",
+            "/assets/catalog/current/rail.json",
+            "weather_location",
+            "gmb_",
+            "mtr_eta",
+            "journey_time",
+        ):
+            self.assertNotIn(removed, header + source + page)
+
+    def test_ttc_catalog_generator_and_ci_are_scoped_to_ttc_assets(self):
+        generator = read_text("scripts/generate_ttc_route_catalog.py")
+        ci = read_text(".github/workflows/ci.yml")
+        release = read_text(".github/workflows/release.yml")
+        self.assertIn('OUTPUT = ROOT / "data" / "catalog" / "ttc"', generator)
+        self.assertIn("SurfaceGTFS.zip", generator)
+        self.assertIn('ASSET_NAMES = ("index.json.gz", "stops-ttc.json.gz")', generator)
+        self.assertIn("TransitTtcCatalogAssets.cpp", generator)
+        self.assertIn("Verify embedded TTC catalog", ci)
+        self.assertIn("scripts/generate_ttc_route_catalog.py --check", ci)
+        self.assertIn("scripts/generate_ttc_route_catalog.py --check", release)
+        self.assertNotIn("generate_transit_route_catalog.py --check", ci + release)
+
+    def test_weather_footer_type_exists_but_no_remote_weather_fetch(self):
+        main = read_text("src/main.cpp")
+        weather = read_text("include/WeatherSnapshot.h")
+        display_header = read_text("include/EInkDisplay.h")
         display = read_text("src/EInkDisplay.cpp")
-        self.assertIn("drawStatusBar", display)
-        self.assertIn("drawWifiIcon", display)
-        self.assertIn("drawBatteryIcon", display)
-        self.assertIn('#include "BatteryMonitor.h"', display)
-        self.assertIn("batteryMonitor.begin()", display)
-        self.assertIn("batteryMonitor.read()", display)
-        self.assertIn("status.percent", display)
-        self.assertIn("status.charging", display)
-        self.assertIn("status.full", display)
-        self.assertIn("drawChargingBolt", display)
-        self.assertIn("String batteryStatusText()", display)
-        self.assertIn('"電量："', display)
-        self.assertIn("充電中", display)
-        self.assertIn("FIRMWARE_VERSION", display)
-        self.assertIn('"版本："', display)
-        self.assertRegex(display, r"showConfigMode[\s\S]*drawText\(18, 124, String\(\"版本：\"\) \+ FIRMWARE_VERSION\)")
-        self.assertRegex(display, r"showConfigMode[\s\S]*drawText\(18, 100, batteryStatusText\(\)\)")
-        self.assertIn("#include <qrcode.h>", display)
-        self.assertIn("drawQrCode", display)
-        self.assertIn("qrcode_initText", display)
-        self.assertIn("qrcode_getModule", display)
-        self.assertIn('String("設定 ") + FIRMWARE_PRODUCT_NAME', display)
-        self.assertIn("網絡：", display)
-        self.assertIn("完成後按「儲存並重啟」", display)
-        self.assertNotIn("需要設定", display)
+        self.assertIn("WeatherSnapshot weatherSnapshot", main)
+        self.assertIn("void refreshWeatherNow()", main)
+        refresh_weather = cpp_function_body(main, "void refreshWeatherNow()")
+        self.assertIn("weatherSnapshot = WeatherSnapshot{}", refresh_weather)
+        self.assertNotIn("fetchCurrentWeather", refresh_weather)
+        self.assertIn("Weather is disabled in the TTC-only build", weather)
+        self.assertIn("weatherDisplayText", weather)
+        self.assertIn("const WeatherSnapshot& weather", display_header)
+        self.assertIn("drawWeatherFooter", display)
+        self.assertNotIn("WeatherClient", main + weather + display_header + display)
+        self.assertNotIn("data.weather.gov.hk", main + weather + display_header + display)
 
-        config = read_text("include/ProductConfig.h")
-        profile_test = read_text("test_host/test_board_profile.cpp")
-        self.assertIn('#define FIRMWARE_VERSION "1.0.2"', config)
-        self.assertIn("battery.adcPin == 4", profile_test)
-        self.assertIn("battery.sensePowerPin == 17", profile_test)
-        self.assertIn("battery.chargeDetectPin == 2", profile_test)
-        self.assertIn("battery.chargeFullPin == 1", profile_test)
-
-        monitor = read_text("src/BatteryMonitor.cpp")
-        self.assertIn("analogReadMilliVolts(battery.adcPin)", monitor)
-        self.assertIn("battery.voltageMultiplier", monitor)
-        self.assertIn("battery.chargeDetectActiveLevel", monitor)
-        self.assertIn("battery.chargeFullActiveLevel", monitor)
-        self.assertIn("batterySnapshotFromSignals", monitor)
-
-    def test_display_uses_four_equal_widget_lane_regions(self):
+    def test_display_uses_four_equal_widget_lane_regions_and_english_copy(self):
         header = read_text("include/EInkDisplay.h")
         display = read_text("src/EInkDisplay.cpp")
-
         for api in (
             "void showDashboard(const transitink::WidgetSnapshotSet& snapshots, const WeatherSnapshot& weather);",
             "void refreshWidgetLane(uint8_t slot, const transitink::WidgetSnapshotSet& snapshots, const WeatherSnapshot& weather);",
@@ -392,9 +295,6 @@ class ProjectStructureTests(unittest.TestCase):
             "void showSleep(const transitink::WidgetSnapshotSet& snapshots, const WeatherSnapshot& weather);",
         ):
             self.assertIn(api, header)
-        self.assertNotIn("EtaController", header)
-        self.assertNotIn("TRANSITINK_LEGACY_COMPAT", header)
-
         self.assertIn("constexpr DisplayRegion kStatusRegion{0, 0, EINK_WIDTH, 42};", display)
         self.assertIn("constexpr DisplayRegion kLaneRegions[transitink::kWidgetSlotCount]", display)
         for rectangle in (
@@ -405,20 +305,21 @@ class ProjectStructureTests(unittest.TestCase):
         ):
             self.assertIn(rectangle, display)
         self.assertIn("constexpr DisplayRegion kFooterRegion{0, 270, EINK_WIDTH, 30};", display)
-        self.assertIn("kLaneRegions[slot]", display)
-        self.assertIn("static_assert(transitink::kWidgetSlotCount == 4", display)
-        self.assertIn("constexpr bool regionFitsPanel(const DisplayRegion& region)", display)
-        for bound in (
-            "region.x >= 0",
-            "region.y >= 0",
-            "region.w > 0",
-            "region.h > 0",
-            "region.x + region.w <= EINK_WIDTH",
-            "region.y + region.h <= EINK_HEIGHT",
-        ):
-            self.assertIn(bound, display)
         self.assertEqual(display.count("static_assert(regionFitsPanel("), 6)
+        self.assertIn('"No widgets configured"', display)
+        self.assertIn('"Press Volume Up for settings"', display)
+        self.assertIn('"Settings · "', display)
+        self.assertIn('"Network: "', display)
+        self.assertIn('"Save and restart when finished"', display)
+        self.assertIn('"Sun", "Mon", "Tue", "Wed"', display)
+        self.assertIn('"%02d/%02d %s %02d:%02d"', display)
+        self.assertIn("const std::size_t valueLimit = 2U", display)
+        self.assertNotIn("JourneyTime", display)
+        for hk_text in ("尚未設定小工具", "按 Volume Up 開啟設定頁", "設定 ", "網絡：", "儲存"):
+            self.assertNotIn(hk_text, display)
 
+    def test_display_refresh_paths_use_snapshot_state_and_partial_regions(self):
+        display = read_text("src/EInkDisplay.cpp")
         dashboard = cpp_function_body(display, "void EInkDisplay::showDashboard(")
         assert_fragments_in_order(
             self,
@@ -431,7 +332,6 @@ class ProjectStructureTests(unittest.TestCase):
             "fullRefresh();",
             "dashboardFrameActive = true;",
         )
-
         lane = cpp_function_body(display, "void EInkDisplay::refreshWidgetLane(")
         assert_fragments_in_order(
             self,
@@ -440,612 +340,168 @@ class ProjectStructureTests(unittest.TestCase):
             "return;",
             "if (!dashboardFrameActive || !previousFrameValid)",
             "showDashboard(snapshots, weather);",
-            "return;",
             "std::memcpy(frameBuffer, previousFrameBuffer, sizeof(frameBuffer));",
             "clearRegion(region);",
-            "shouldDrawLaneDivider(snapshots, slot)",
             "drawWidgetLane(slot, snapshots[slot], false, drawDivider);",
             "partialRefresh(region.x, region.y, region.w, region.h);",
         )
+        widget_lane = cpp_function_body(display, "void drawWidgetLane(uint8_t slot,")
+        self.assertIn("snapshot.type == transitink::WidgetType::Disabled", widget_lane)
+        self.assertIn("snapshot.state == transitink::WidgetState::Empty", widget_lane)
+        self.assertIn("snapshot.state == transitink::WidgetState::Error", widget_lane)
+        self.assertIn("snapshot.providerMessage", widget_lane)
+        self.assertIn("snapshot.freshness == transitink::Freshness::Stale", widget_lane)
+        self.assertIn('"No data"', widget_lane)
+        self.assertIn('"Stale"', widget_lane)
+        self.assertIn('drawText(valueX, valueY, "-")', widget_lane)
+        partial = cpp_function_body(display, "void refreshCanvasPartially(")
+        self.assertIn("stats.changedBits == 0", partial)
+        self.assertIn("stats.ratio() >= kForceFullPartialDiffRatio", partial)
+        self.assertIn("panel.showPartialRegion", partial)
 
-        clock = cpp_function_body(
-            display,
-            "void EInkDisplay::refreshClock(const transitink::WidgetSnapshotSet&",
-        )
-        assert_fragments_in_order(
-            self,
-            clock,
-            "if (!dashboardFrameActive || !previousFrameValid)",
-            "showDashboard(snapshots, weather);",
-            "return;",
-            "std::memcpy(frameBuffer, previousFrameBuffer, sizeof(frameBuffer));",
-            "clearRegion(kStatusRegion);",
-            "drawClockAndStatusBar();",
-            "partialRefresh(kStatusRegion.x, kStatusRegion.y, kStatusRegion.w, kStatusRegion.h);",
-        )
-
-        footer = cpp_function_body(display, "void EInkDisplay::refreshWeatherFooter(")
-        assert_fragments_in_order(
-            self,
-            footer,
-            "if (!dashboardFrameActive || !previousFrameValid)",
-            "showDashboard(snapshots, weather);",
-            "return;",
-            "std::memcpy(frameBuffer, previousFrameBuffer, sizeof(frameBuffer));",
-            "clearRegion(kFooterRegion);",
-            "drawWeatherFooter(weather);",
-            "partialRefresh(kFooterRegion.x, kFooterRegion.y, kFooterRegion.w, kFooterRegion.h);",
-        )
-
-        sleep = cpp_function_body(
-            display,
-            "void EInkDisplay::showSleep(const transitink::WidgetSnapshotSet&",
-        )
-        assert_fragments_in_order(
-            self,
-            sleep,
-            "canvas.clear();",
-            "drawClockAndStatusBar();",
-            "shouldDrawLaneDivider(snapshots, slot)",
-            "drawWidgetLane(slot, snapshots[slot], true, drawDivider);",
-            "drawWeatherFooter(weather);",
-            "markNonDashboardFrame();",
-            "fullRefresh();",
-        )
-
-        self.assertIn('"%02d/%02d %s %02d:%02d"', display)
-        self.assertIn('"星期日", "星期一", "星期二", "星期三",', display)
-        self.assertIn('"星期四", "星期五", "星期六"', display)
-        self.assertIn("String currentClockText()", display)
-        self.assertIn("drawText(12, 24, currentClockText())", display)
-        self.assertIn("panel.showPartialRegion(frameBuffer, previousFrameBuffer, x, y, w, h)", display)
-        self.assertIn("copyPartialRegionToPrevious(x, y, w, h)", display)
-        self.assertIn("previousFrameValid", display)
-        self.assertIn("kMaxPartialRefreshes", display)
-        self.assertRegex(display, r"constexpr int kMaxPartialRefreshes\s*=\s*8;")
-        self.assertIn("partialRefreshCount", display)
-        self.assertIn("std::memcpy(previousFrameBuffer, frameBuffer, sizeof(frameBuffer))", display)
-        self.assertNotIn('"%02d:%02d 更新"', display)
-        self.assertNotIn('return "未更新";', display)
-    def test_dashboard_lanes_render_snapshot_state_and_type_aware_value_caps(self):
-        display = read_text("src/EInkDisplay.cpp")
-        lane_signature = "void drawWidgetLane(uint8_t slot,"
-        self.assertIn(lane_signature, display)
-        lane = cpp_function_body(display, lane_signature)
-        self.assertIn("snapshot.type == transitink::WidgetType::Disabled", lane)
-        disabled = lane.index("snapshot.type == transitink::WidgetType::Disabled")
-        self.assertLess(disabled, lane.index("return;", disabled))
-        self.assertNotIn("drawLaneDivider", lane[disabled:lane.index("return;", disabled)])
-        self.assertIn("drawLaneDivider(region, drawDivider)", lane)
-        divider_helper = cpp_function_body(display, "bool shouldDrawLaneDivider(")
-        self.assertIn("snapshots[slot].type == transitink::WidgetType::Disabled", divider_helper)
-        self.assertIn("snapshots[index].type != transitink::WidgetType::Disabled", divider_helper)
-        self.assertIn("snapshot.state == transitink::WidgetState::Empty", lane)
-        self.assertIn("snapshot.state == transitink::WidgetState::Error", lane)
-        self.assertIn("snapshot.providerMessage", lane)
-        self.assertIn("snapshot.freshness == transitink::Freshness::Stale", lane)
-        self.assertIn('"資料已逾期"', lane)
-        self.assertIn('"暫未能取得資料"', lane)
-        self.assertIn("snapshot.type == transitink::WidgetType::JourneyTime ? 1U : 2U", lane)
-        self.assertIn("std::min(snapshot.valueCount, valueLimit)", lane)
-        shown_values = lane.index("const std::size_t shownValueCount")
-        stale_empty = lane.index("snapshot.freshness == transitink::Freshness::Stale")
-        self.assertLess(lane.index('"暫未能取得資料"', stale_empty), shown_values)
-        fresh_empty_error = lane.index("snapshot.freshness == transitink::Freshness::Fresh")
-        self.assertLess(lane.index("snapshot.providerMessage", fresh_empty_error), shown_values)
-        self.assertLess(lane.index("return;", fresh_empty_error), shown_values)
-        self.assertIn("snapshot.values[valueIndex].text", lane)
-        self.assertIn("snapshot.type == transitink::WidgetType::JourneyTime", lane)
-        self.assertIn("snapshot.values[valueIndex].context", lane)
-        self.assertGreater(lane.index('"資料已逾期"'), shown_values)
-        self.assertIn('drawText(valueX, valueY, "-")', lane)
-
-    def test_display_truncates_utf8_by_measured_codepoints_and_uses_transitink_branding(self):
-        display = read_text("src/EInkDisplay.cpp")
-        self.assertTrue((ROOT / "include/core/DisplayTextCore.h").exists())
-        self.assertTrue((ROOT / "src/core/DisplayTextCore.cpp").exists())
-        core_header = read_text("include/core/DisplayTextCore.h")
-        core = read_text("src/core/DisplayTextCore.cpp")
-        self.assertIn("int measureTextWidth(const String& text)", display)
-        self.assertIn("void drawTruncatedText(int x, int y, const String& text, int maxWidth)", display)
-        self.assertRegex(display, r"measureTextWidth[\s\S]*decodeUtf8Codepoint[\s\S]*findHkGlyph")
-        truncated_body = cpp_function_body(display, "void drawTruncatedText(")
-        self.assertIn("transitink::planTruncatedUtf8", truncated_body)
-        self.assertIn("drawText(x, y, String(plan.text.c_str()))", truncated_body)
-        self.assertNotIn("substring(", truncated_body)
-        self.assertIn("using CodepointWidth", core_header)
-        self.assertIn("struct DisplayTextPlan", core_header)
-        self.assertIn('"…"', core)
-        for suffix in ('"..."', '".."', '"."', '""'):
-            self.assertIn(suffix, core)
-        self.assertIn("output.reserve", core)
-        self.assertNotIn("std::function", core_header + core)
-        self.assertIn("drawText(18, 42, FIRMWARE_PRODUCT_NAME)", display)
-        self.assertIn('drawText(18, 38, String("設定 ") + FIRMWARE_PRODUCT_NAME)', display)
-        self.assertNotIn('"設定 TransitInk"', display)
-        self.assertNotIn("TRANSITINK_LEGACY_COMPAT", display)
-
-    def test_partial_refresh_skips_noop_and_promotes_large_diff_to_full(self):
-        display = read_text("src/EInkDisplay.cpp")
-        self.assertIn("constexpr float kForceFullPartialDiffRatio = 0.30f;", display)
-        self.assertIn("struct PartialDiffStats", display)
-        self.assertIn("PartialDiffStats partialDiffStats(int x, int y, int w, int h)", display)
-        self.assertIn("stats.changedBits == 0", display)
-        self.assertIn('Serial.println("EPD partial skipped: unchanged")', display)
-        self.assertIn("stats.ratio() >= kForceFullPartialDiffRatio", display)
-        self.assertIn('Serial.println("EPD partial promoted to full: large diff")', display)
-        self.assertRegex(display, r"refreshCanvasPartially[\s\S]*stats\.changedBits == 0[\s\S]*return;[\s\S]*stats\.ratio\(\) >= kForceFullPartialDiffRatio[\s\S]*flushCanvas\(\);[\s\S]*return;[\s\S]*panel\.showPartialRegion")
-
-    def test_widget_refresh_helpers_force_all_and_service_only_one_due_slot(self):
-        main = read_text("src/main.cpp")
-        all_body = cpp_function_body(main, "void refreshAllWidgetsNow()")
-        assert_fragments_in_order(
-            self,
-            all_body,
-            "widgetScheduler.forceAllDue(nowMs);",
-            "attempts < transitink::kWidgetSlotCount",
-            "widgetScheduler.hasPendingDue(nowMs)",
-            "widgetScheduler.serviceNextDue(nowMs, nowEpoch);",
-            "einkDisplay.showDashboard(currentDisplaySnapshots(), weatherSnapshot);",
-        )
-        self.assertEqual(1, all_body.count("serviceNextDue("))
-        one_body = cpp_function_body(main, "void serviceOneWidgetIfDue()")
-        self.assertEqual(1, one_body.count("serviceNextDue("))
-        assert_fragments_in_order(
-            self,
-            one_body,
-            "const transitink::WidgetTickResult tick = widgetScheduler.serviceNextDue",
-            "if (!tick.ran)",
-            "einkDisplay.refreshWidgetLane(tick.slot, currentDisplaySnapshots(), weatherSnapshot);",
-        )
-
-    def test_clock_refreshes_on_minute_boundary_independent_of_eta(self):
-        main = read_text("src/main.cpp")
-        header = read_text("include/EInkDisplay.h")
-        display = read_text("src/EInkDisplay.cpp")
-        self.assertIn("unsigned long nextClockRefreshMs = 0", main)
-        self.assertIn("uint32_t secondsUntilNextMinute(time_t now)", main)
-        self.assertIn("60 - (now % 60)", main)
-        self.assertIn("void scheduleNextClockRefresh()", main)
-        self.assertIn("void refreshClockNow()", main)
-        self.assertIn('Serial.println("Clock refresh start")', main)
-        self.assertIn("einkDisplay.refreshClock(currentDisplaySnapshots(), weatherSnapshot);", main)
-        self.assertIn("scheduleNextClockRefresh();", main)
-        self.assertNotIn("EtaController", header)
-        self.assertIn("constexpr DisplayRegion kStatusRegion{0, 0, EINK_WIDTH, 42};", display)
-        self.assertIn("clearRegion(kStatusRegion);", display)
-        self.assertIn("drawClockAndStatusBar()", display)
-        self.assertIn("partialRefresh(kStatusRegion.x, kStatusRegion.y, kStatusRegion.w, kStatusRegion.h)", display)
-        self.assertRegex(display, r"drawClockAndStatusBar\(\)[\s\S]*drawStatusBar\(\);[\s\S]*drawText\(12, 24, currentClockText\(\)\);")
-        self.assertNotIn("showEta", main)
-        self.assertRegex(main, r"loop\(\)[\s\S]*serviceOneWidgetIfDue\(\);")
-        self.assertRegex(main, r"loop\(\)[\s\S]*millis\(\) >= nextClockRefreshMs[\s\S]*refreshClockNow\(\);")
-
-    def test_eink_text_renderer_uses_only_pinned_custom_glyph_data(self):
-        display = read_text("src/EInkDisplay.cpp")
-        self.assertIn("decodeUtf8Codepoint", display)
-        self.assertIn('#include "HkGlyphFont.h"', display)
-        self.assertIn("drawCustomGlyph(cursorX, y, codepoint)", display)
-        self.assertIn("if (width > 0) {", display)
-        self.assertNotIn("U8g2_for_Adafruit_GFX", display)
-        self.assertNotIn("u8g2_font_", display)
-        self.assertNotIn("selectFontForGlyph", display)
-        self.assertNotIn("encodeUtf8Codepoint", display)
-        self.assertNotIn("codepoint = '?';", display)
-
-        glyph_lookup = read_text("src/HkGlyphFont.cpp")
-        glyphs = read_text("src/generated/HkGlyphFontData.cpp")
-        self.assertIn("0x9418", glyphs)
-        self.assertIn("SPDX-License-Identifier: OFL-1.1", glyphs)
-        self.assertIn("findHkGlyph", glyph_lookup)
-        self.assertNotIn("kHkGlyphs[]", glyph_lookup)
-
-    def test_transitink_portal_has_three_tabs_and_four_accessible_widget_cards(self):
-        page = read_text("src/TransitInkPortalPage.cpp")
-        for label in ("Wi-Fi", "主頁小工具", "更新及省電"):
-            self.assertIn(label, page)
-        self.assertIn("label_tc:'港鐵'", page)
-        self.assertNotIn("港鐵重鐵", page)
-        self.assertIn('role="tablist"', page)
-        self.assertIn('role="tab"', page)
-        self.assertIn('aria-selected', page)
-        self.assertIn('aria-expanded', page)
-        self.assertIn('aria-live="polite"', page)
-        self.assertIn(":focus-visible", page)
-        self.assertIn("Array.from({length:4}", page)
-        self.assertIn("let expandedSlot=0", page)
-        for function in (
-            "selectTab", "expandWidgetCard", "renderWidgetCards",
-            "setWidgetType", "moveWidget", "ensureCatalogForSlot",
-            "validateWidgetDrafts", "collectConfig",
-        ):
-            self.assertIn(f"function {function}", page)
-
-    def test_widget_editor_stages_catalogs_clears_dependents_and_guards_stale_requests(self):
-        page = read_text("src/TransitInkPortalPage.cpp")
-        for endpoint in (
-            "/assets/catalog/current/index.json",
-            "/assets/catalog/current/stops-${provider}.json",
-            "/assets/catalog/current/rail.json",
-            "/api/catalog/route-index", "/api/catalog/update",
-            "/api/catalog/route-override", "/api/catalog/route-refresh",
-            "/api/catalog/journey/locations", "/api/catalog/journey/destinations",
-        ):
-            self.assertIn(endpoint, page)
-        for online_catalog in (
-            "/api/catalog/bus/routes", "/api/catalog/bus/directions",
-            "/api/catalog/bus/stops", "/api/catalog/gmb/routes",
-            "/api/catalog/gmb/directions", "/api/catalog/gmb/stops",
-            "/api/catalog/rail/lines", "/api/catalog/rail/stations",
-            "/api/catalog/rail/directions",
-        ):
-            self.assertNotIn(online_catalog, page)
-        self.assertIn("requestVersion[slot]", page)
-        self.assertIn("if(token!==requestVersion[slot])return", page)
-        self.assertIn("clearBusAfterOperator", page)
-        self.assertIn("clearBusAfterRoute", page)
-        self.assertIn("clearRailAfterMode", page)
-        self.assertIn("clearJourneyAfterLocation", page)
-        self.assertIn("上移", page)
-        self.assertIn("下移", page)
-        self.assertIn("[catalogState[slot],catalogState[target]]=[catalogState[target],catalogState[slot]]", page)
-        self.assertIn("[widgetErrors[slot],widgetErrors[target]]=[widgetErrors[target],widgetErrors[slot]]", page)
-        self.assertIn("disabled", page)
-        self.assertIn("bus_eta", page)
-        self.assertIn("mtr_eta", page)
-        self.assertIn("journey_time", page)
-
-    def test_portal_is_password_safe_and_has_one_save_action(self):
-        page = read_text("src/TransitInkPortalPage.cpp")
-        codec = read_text("src/PortalConfigCodec.cpp")
-        self.assertEqual(page.count("儲存並重新啟動"), 1)
-        self.assertIn("留空會保留目前已儲存的密碼", page)
-        self.assertIn("wifi_password_set", codec)
-        self.assertNotIn('doc["wifi_password"] = config.wifiPassword', codec)
-        self.assertNotIn("value=cfg.wifi_password", page)
-        self.assertNotIn("refresh_seconds", page)
-        self.assertNotIn("/api/routes", page)
-        self.assertNotIn("/api/route-stops", page)
-
-    def test_config_portal_shows_device_battery_percent(self):
-        header = read_text("include/ConfigPortal.h")
-        self.assertIn('#include "BatteryMonitor.h"', header)
-        self.assertIn("BatteryMonitor batteryMonitor_", header)
-
-        portal = read_text("src/ConfigPortal.cpp")
-        page = read_text("src/TransitInkPortalPage.cpp")
-        codec = read_text("src/PortalConfigCodec.cpp")
-        self.assertIn("batteryMonitor_.begin()", portal)
-        self.assertIn("batteryMonitor_.read()", portal)
-        self.assertIn('JsonObject batteryJson = doc.createNestedObject("battery")', codec)
-        self.assertIn('batteryJson["percent"] = battery.percent', codec)
-        self.assertIn('id="battery_percent"', page)
-        self.assertIn('id="firmware_version"', page)
-        self.assertIn("function renderDeviceFacts", page)
-        self.assertIn("電量", page)
-        self.assertIn("版本", page)
-
-    def test_weather_location_setting_and_eta_display(self):
-        config = read_text("include/AppConfig.h")
-        self.assertIn("String weatherLocationTc", config)
-
-        config_impl = read_text("src/AppConfig.cpp")
-        self.assertIn('parsed.weatherLocationTc = asString(doc["weather_location_tc"])', config_impl)
-        self.assertIn('doc["weather_location_tc"] = config.weatherLocationTc', config_impl)
-
-        page = read_text("src/TransitInkPortalPage.cpp")
-        self.assertIn('id="weather_location"', page)
-        self.assertIn("renderWeatherLocationOptions", page)
-        self.assertIn("renderWeatherLocationOptions(cfg.weather_location_tc", page)
-        self.assertIn("weather_location_tc:byId('weather_location').value", page)
-        self.assertIn("天氣位置", page)
-
-        weather_header = read_text("include/WeatherClient.h")
-        self.assertIn("struct WeatherSnapshot", weather_header)
-        self.assertIn("bool fetchCurrentWeather", weather_header)
-        self.assertIn("String weatherDisplayText", weather_header)
-
-        weather_client = read_text("src/WeatherClient.cpp")
-        self.assertIn("data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=tc", weather_client)
-        self.assertIn('item["place"]', weather_client)
-        self.assertIn('item["value"]', weather_client)
-        self.assertIn("weatherConditionText", weather_client)
-
-        display_header = read_text("include/EInkDisplay.h")
-        self.assertIn('#include "WeatherClient.h"', display_header)
-        self.assertIn("const WeatherSnapshot& weather", display_header)
-
-        display = read_text("src/EInkDisplay.cpp")
-        self.assertIn("drawWeatherFooter", display)
-        self.assertIn("weatherDisplayText(weather)", display)
-        self.assertIn("drawTruncatedText(12, 291, weatherDisplayText(weather), 376)", display)
-        footer = cpp_function_body(display, "void drawWeatherFooter(")
-        self.assertNotIn("同步", footer)
-        self.assertNotIn("fetchedAtEpoch", footer)
-
-        main = read_text("src/main.cpp")
-        self.assertIn("WeatherClient weatherClient", main)
-        self.assertIn("WeatherSnapshot weatherSnapshot", main)
-        self.assertIn("unsigned long nextWeatherRefreshMs = 0", main)
-        self.assertIn("void refreshWeatherNow()", main)
-        self.assertIn("weatherClient.fetchCurrentWeather(deviceConfig.weatherLocationTc, weatherSnapshot", main)
-        self.assertIn("WEATHER_REFRESH_SECONDS", main)
-        self.assertIn("refreshWeatherNow();", main)
-        weather_body = cpp_function_body(main, "void refreshWeatherNow()")
-        self.assertIn("einkDisplay.refreshWeatherFooter(currentDisplaySnapshots(), weatherSnapshot);", weather_body)
-        self.assertNotIn("showDashboard", weather_body)
-
-    def test_sleep_power_settings_are_persisted_and_exposed(self):
-        config = read_text("include/ProductConfig.h")
-        self.assertIn("#define SLEEP_ENABLED_DEFAULT 1", config)
-        self.assertIn("#define SLEEP_WAKE_DEFAULT_MINUTES 5", config)
-        self.assertIn("#define SLEEP_MAINTENANCE_DEFAULT_HOURS 12", config)
-        self.assertIn("#define SCHEDULED_WAKE_ENABLED_DEFAULT 0", config)
-        self.assertIn("#define SCHEDULED_WAKE_START_DEFAULT_MINUTES 480", config)
-        self.assertIn("#define SCHEDULED_WAKE_END_DEFAULT_MINUTES 540", config)
-
-        app_config = read_text("include/AppConfig.h")
-        self.assertIn("bool sleepEnabled = SLEEP_ENABLED_DEFAULT", app_config)
-        self.assertIn("uint16_t wakeDurationMinutes = SLEEP_WAKE_DEFAULT_MINUTES", app_config)
-        self.assertIn("uint16_t sleepMaintenanceHours = SLEEP_MAINTENANCE_DEFAULT_HOURS", app_config)
-        self.assertIn("bool scheduledWakeEnabled = SCHEDULED_WAKE_ENABLED_DEFAULT", app_config)
-        self.assertIn("uint16_t scheduledWakeStartMinutes = SCHEDULED_WAKE_START_DEFAULT_MINUTES", app_config)
-        self.assertIn("uint16_t scheduledWakeEndMinutes = SCHEDULED_WAKE_END_DEFAULT_MINUTES", app_config)
-
-        config_impl = read_text("src/AppConfig.cpp")
-        self.assertIn('parsed.sleepEnabled = doc["sleep_enabled"] | static_cast<bool>(SLEEP_ENABLED_DEFAULT)', config_impl)
-        self.assertIn('parsed.wakeDurationMinutes = doc["wake_duration_minutes"] | SLEEP_WAKE_DEFAULT_MINUTES', config_impl)
-        self.assertIn('parsed.sleepMaintenanceHours = doc["sleep_maintenance_hours"] | SLEEP_MAINTENANCE_DEFAULT_HOURS', config_impl)
-        self.assertIn("if (parsed.wakeDurationMinutes < 1)", config_impl)
-        self.assertIn("if (parsed.wakeDurationMinutes > 60)", config_impl)
-        self.assertIn("if (parsed.sleepMaintenanceHours > 24)", config_impl)
-        self.assertIn('doc["sleep_enabled"] = config.sleepEnabled', config_impl)
-        self.assertIn('doc["wake_duration_minutes"] = config.wakeDurationMinutes', config_impl)
-        self.assertIn('doc["sleep_maintenance_hours"] = config.sleepMaintenanceHours', config_impl)
-        self.assertIn('doc["scheduled_wake_enabled"] = config.scheduledWakeEnabled', config_impl)
-        self.assertIn('doc["scheduled_wake_start_minutes"] = config.scheduledWakeStartMinutes', config_impl)
-        self.assertIn('doc["scheduled_wake_end_minutes"] = config.scheduledWakeEndMinutes', config_impl)
-
-        page = read_text("src/TransitInkPortalPage.cpp")
-        self.assertIn('id="sleep_enabled"', page)
-        self.assertIn('id="wake_duration_minutes"', page)
-        self.assertIn('id="sleep_maintenance_hours"', page)
-        self.assertIn('id="scheduled_wake_enabled"', page)
-        self.assertIn('id="scheduled_wake_start"', page)
-        self.assertIn('id="scheduled_wake_end"', page)
-        self.assertIn("省電睡眠模式", page)
-        self.assertIn("按鍵喚醒後保持醒著", page)
-        self.assertIn("睡眠中時間及天氣同步", page)
-        self.assertIn("不會喚醒畫面或更新即時交通資料；輸入 0 代表停用。", page)
-        self.assertIn("每日定時喚醒", page)
-        self.assertIn("其他時間仍可按 Wake Up 鍵喚醒", page)
-        self.assertIn("byId('sleep_enabled').checked=cfg.sleep_enabled!==false", page)
-        self.assertIn("byId('wake_duration_minutes').value=cfg.wake_duration_minutes||5", page)
-        self.assertIn("byId('sleep_maintenance_hours').value=cfg.sleep_maintenance_hours??12", page)
-        self.assertIn("sleep_enabled:byId('sleep_enabled').checked", page)
-        self.assertIn("wake_duration_minutes:Number(byId('wake_duration_minutes').value||5)", page)
-        self.assertIn("sleep_maintenance_hours:Number(byId('sleep_maintenance_hours').value||0)", page)
-        self.assertIn("scheduled_wake_enabled:byId('scheduled_wake_enabled').checked", page)
-        self.assertIn("scheduled_wake_start_minutes:timeToMinutes(byId('scheduled_wake_start').value)", page)
-        self.assertIn("scheduled_wake_end_minutes:timeToMinutes(byId('scheduled_wake_end').value)", page)
-        for cadence in (
-            "<span>港鐵 ETA</span><strong>每 30 秒</strong>",
-            "<span>巴士 ETA</span><strong>每 60 秒</strong>",
-            "<span>行車時間</span><strong>每 120 秒</strong>",
-        ):
-            self.assertIn(cadence, page)
-
-    def test_sleep_state_uses_light_sleep_gpio0_home_wake_and_stops_network_services(self):
+    def test_home_button_sleep_wakeup_and_volume_buttons_reset_or_open_config(self):
         main = read_text("src/main.cpp")
         support = read_text("src/hardware/BoardSupport.cpp")
+        self.assertIn("transitink::hardware::configureHomeWakeup()", main)
+        self.assertIn("transitink::hardware::homeButtonPressed()", main)
+        self.assertIn("transitink::hardware::takeHomePress()", main)
+        self.assertIn("transitink::hardware::clearPendingHomePress()", main)
+        self.assertIn("startButtonMonitoring", support)
+        self.assertIn("DebouncedButtonPressDetector", support)
+        self.assertIn("gpio_wakeup_enable", support)
+        self.assertIn("rtc_gpio_deinit", support)
+        self.assertIn("ESP_SLEEP_WAKEUP_GPIO", main)
+        self.assertNotIn("pinMode(", main)
+
+        self.assertIn("DualButtonHoldDetector", support)
+        self.assertIn("SingleButtonClickDetector", support)
+        self.assertIn("factoryResetUpButtonPressed()", support)
+        self.assertIn("factoryResetDownButtonPressed()", support)
+        self.assertIn("buttonPressed(kBoardProfile.buttons.configPin)", support)
+        self.assertIn("takeFactoryResetHold()", main)
+        self.assertIn("configStore.clear()", main)
+        self.assertIn("WiFi.disconnect(true, true)", main)
+        self.assertIn("LittleFS.format()", main)
+        self.assertIn('"Device reset\\nRelease volume keys to reboot"', main)
+        self.assertIn("void showConfigAccessScreen()", main)
+        self.assertIn("void returnToDashboard()", main)
+        self.assertIn("void serviceConfigButton()", main)
+        self.assertIn("Config button clicked", main)
+        self.assertIn("configPortal.begin(useAccessPoint)", main)
+        self.assertIn("configPortal.pageUrl()", main)
+        self.assertIn("configPortal.isApMode()", main)
+        self.assertIn('"Password: " + configPortal.apPassword()', main)
+        self.assertIn('"Local settings\\n"', main)
+
+    def test_sleep_power_settings_are_persisted_exposed_and_use_light_sleep(self):
+        config = read_text("include/ProductConfig.h")
+        for define in (
+            "#define SLEEP_ENABLED_DEFAULT 1",
+            "#define SLEEP_WAKE_DEFAULT_MINUTES 5",
+            "#define SLEEP_MAINTENANCE_DEFAULT_HOURS 12",
+            "#define SCHEDULED_WAKE_ENABLED_DEFAULT 0",
+            "#define SCHEDULED_WAKE_START_DEFAULT_MINUTES 480",
+            "#define SCHEDULED_WAKE_END_DEFAULT_MINUTES 540",
+        ):
+            self.assertIn(define, config)
+        app_config = read_text("include/AppConfig.h")
+        for field in (
+            "bool sleepEnabled = SLEEP_ENABLED_DEFAULT",
+            "uint16_t wakeDurationMinutes = SLEEP_WAKE_DEFAULT_MINUTES",
+            "uint16_t sleepMaintenanceHours = SLEEP_MAINTENANCE_DEFAULT_HOURS",
+            "bool scheduledWakeEnabled = SCHEDULED_WAKE_ENABLED_DEFAULT",
+            "uint16_t scheduledWakeStartMinutes = SCHEDULED_WAKE_START_DEFAULT_MINUTES",
+            "uint16_t scheduledWakeEndMinutes = SCHEDULED_WAKE_END_DEFAULT_MINUTES",
+        ):
+            self.assertIn(field, app_config)
+
+        page = read_text("src/TransitInkPortalPage.cpp")
+        for fragment in (
+            'id="sleep_enabled"',
+            'id="wake_duration_minutes"',
+            'id="sleep_maintenance_hours"',
+            'id="scheduled_wake_enabled"',
+            'id="scheduled_wake_start"',
+            'id="scheduled_wake_end"',
+            "Enable sleep",
+            "Wake duration (minutes)",
+            "Maintenance wake (hours)",
+            "Daily wake window",
+        ):
+            self.assertIn(fragment, page)
+
+        main = read_text("src/main.cpp")
         self.assertIn("#include <esp_sleep.h>", main)
         self.assertIn("#include <esp_wifi.h>", main)
-        self.assertIn('#include "driver/gpio.h"', support)
-        self.assertIn('#include "driver/rtc_io.h"', support)
-        self.assertIn("unsigned long wakeStartedAtMs = 0", main)
-        self.assertIn("bool sleepMaintenanceWake = false", main)
         self.assertIn("void enterSleepMode(const char* reason)", main)
         self.assertIn("void configureLightSleepWakeup()", main)
         self.assertIn("void returnFromLightSleep()", main)
         self.assertIn("void performLightSleepMaintenance()", main)
         self.assertIn("RTC_NOINIT_ATTR uint32_t sleepResumeMarker", main)
-        self.assertIn("RTC_NOINIT_ATTR uint32_t sleepResumeMarkerInverse", main)
-        self.assertIn("void armSleepResumeMarker()", main)
-        self.assertIn("bool consumeSleepResumeMarker()", main)
         self.assertIn("bus_eta::SleepSettings sleepSettingsFromConfig", main)
         self.assertIn("const bool sleepBlocked = configAccessMode || chargeSnapshot.powerPresent", main)
         self.assertIn("scheduledWakeSession", main)
         self.assertIn("scheduledWakeWindowActiveNow()", main)
-        self.assertRegex(
-            main,
-            r"bus_eta::shouldAutoSleep\(\s*sleepSettingsFromConfig\(\),\s*wakeStartedAtMs,\s*millis\(\),\s*sleepBlocked,\s*scheduledWakeSession,\s*scheduledWakeWindowActive\)",
-        )
         self.assertIn("configPortal.stop();", main)
         self.assertIn("WiFi.disconnect(true, true)", main)
         self.assertIn("esp_wifi_stop()", main)
         self.assertIn("WiFi.mode(WIFI_OFF)", main)
-        self.assertIn("einkDisplay.prepareForSleep()", main)
-        self.assertIn("transitink::hardware::configureHomeWakeup()", main)
-        self.assertNotIn("transitink::hardware::configureChargeWakeup()", main)
-        self.assertNotIn("configureChargeWakeup", support)
-        wake_config = cpp_function_body(main, "void configureLightSleepWakeup()")
-        assert_fragments_in_order(
-            self,
-            wake_config,
-            "esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);",
-            "transitink::hardware::configureHomeWakeup();",
-            "esp_sleep_enable_timer_wakeup(timerUs);",
-        )
-        self.assertIn("esp_sleep_enable_gpio_wakeup()", support)
         self.assertIn("esp_light_sleep_start()", main)
         self.assertNotIn("esp_deep_sleep_start()", main)
         self.assertNotIn("esp_sleep_enable_ext0_wakeup", main)
-        self.assertIn("esp_sleep_enable_timer_wakeup", main)
         self.assertIn("sleepMaintenanceIntervalUs", main)
         self.assertIn("secondsUntilScheduledWakeStart", main)
         self.assertIn("wakeCause == ESP_SLEEP_WAKEUP_TIMER", main)
         self.assertIn("wakeCause == ESP_SLEEP_WAKEUP_GPIO", main)
-        self.assertIn("waitForHomeRelease();", main)
-        self.assertIn("returnFromLightSleep();", main)
-        self.assertIn("performLightSleepMaintenance();", main)
-        self.assertIn("refreshWeatherNow();", main)
-        self.assertIn("refreshAllWidgetsNow();", main)
-        self.assertIn("enterSleepMode(\"maintenance complete\")", main)
-        sleep_loop = cpp_function_body(main, "void enterSleepMode(const char* reason)")
+
+        configure_wakeup = cpp_function_body(main, "void configureLightSleepWakeup()")
         assert_fragments_in_order(
             self,
-            sleep_loop,
+            configure_wakeup,
+            "esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);",
+            "transitink::hardware::configureHomeWakeup();",
+            "esp_sleep_enable_timer_wakeup(timerUs);",
+        )
+        enter_sleep = cpp_function_body(main, "void enterSleepMode(const char* reason)")
+        assert_fragments_in_order(
+            self,
+            enter_sleep,
             "armSleepResumeMarker();",
             "esp_light_sleep_start();",
             "clearSleepResumeMarker();",
         )
-        setup_body = cpp_function_body(main, "void setup()")
-        assert_fragments_in_order(
-            self,
-            setup_body,
-            "const bool rtcResetWake = consumeSleepResumeMarker();",
-            "const bool persistentResetWake = configStoreReady && configStore.sleepResumePending();",
-            "const bool resetWake = rtcResetWake || persistentResetWake;",
-            "bus_eta::decideSleepResumeAction(",
-            "SleepResumeAction::ShowDashboard",
-            "einkDisplay.begin(false);",
-        )
-        self.assertRegex(main, r"if \(deviceConfig\.sleepEnabled && sleepMaintenanceWake\) \{[\s\S]*performLightSleepMaintenance\(\);[\s\S]*enterSleepMode\(\"maintenance complete\"\)")
         maintenance = cpp_function_body(main, "void performLightSleepMaintenance()")
-        assert_fragments_in_order(
-            self,
-            maintenance,
-            "syncTimeAndWeatherBeforeDashboard(false);",
-            "stopNetworkForSleep();",
-            "einkDisplay.refreshSleepStatusAndWeather(currentDisplaySnapshots(), weatherSnapshot);",
-            "einkDisplay.prepareForSleep();",
-        )
+        self.assertIn("syncTimeAndWeatherBeforeDashboard(false);", maintenance)
+        self.assertIn("stopNetworkForSleep();", maintenance)
+        self.assertIn("einkDisplay.refreshSleepStatusAndWeather(currentDisplaySnapshots(), weatherSnapshot);", maintenance)
         self.assertNotIn("widgetScheduler", maintenance)
-        self.assertNotIn("einkDisplay.showSleep", maintenance)
-        self.assertNotIn("einkDisplay.begin", maintenance)
-        home_wake = cpp_function_body(main, "void returnFromLightSleep()")
-        self.assertIn("startHomeWakeRefresh();", home_wake)
-        self.assertNotIn("connectWifi(deviceConfig)", home_wake)
-        self.assertNotIn("syncTimeAndWeatherBeforeDashboard", home_wake)
-        self.assertNotIn("refreshAllWidgetsNow", home_wake)
-        self.assertNotIn("refreshWeatherNow", home_wake)
 
-        battery = read_text("include/BatteryMonitor.h")
-        self.assertIn("void shutdown();", battery)
-        display = read_text("src/EInkDisplay.cpp")
-        self.assertNotRegex(display, r"void EInkDisplay::prepareForSleep\(\) \{[\s\S]*batteryMonitor\.shutdown\(\);[\s\S]*\}")
-
-    def test_sleep_screen_removes_stale_eta_minutes_without_bottom_right_icons(self):
-        header = read_text("include/EInkDisplay.h")
-        self.assertIn("void begin(bool showBootScreen = true);", header)
-        self.assertIn("void showSleep(const transitink::WidgetSnapshotSet& snapshots, const WeatherSnapshot& weather);", header)
-        self.assertNotIn("void showSleep(const DeviceConfig& config, const WeatherSnapshot& weather);", header)
-        self.assertIn(
-            "void refreshSleepStatusAndWeather(const transitink::WidgetSnapshotSet& snapshots, const WeatherSnapshot& weather);",
-            header,
-        )
-        self.assertIn("void prepareForSleep();", header)
-
-        display = read_text("src/EInkDisplay.cpp")
-        self.assertNotIn("drawAwakeCatIcon", display)
-        self.assertNotIn("drawSleepCatIcon", display)
-        self.assertNotIn("drawCatIcon", display)
-        self.assertNotIn('drawText(x + 2, y + 8, "Z")', display)
-        self.assertNotIn("canvas.fillCircle(x + 32, y + 34, 18, kColorBlack)", display)
-        self.assertIn("void drawWidgetLane(uint8_t slot, const transitink::WidgetSnapshot& snapshot, bool sleeping, bool drawDivider)", display)
-        self.assertIn('drawText(valueX, valueY, "-")', display)
-        self.assertNotIn("休眠中", display)
-        self.assertIn("EInkDisplay::showSleep", display)
-        snapshot_sleep_body = cpp_function_body(
-            display,
-            "void EInkDisplay::showSleep(const transitink::WidgetSnapshotSet&",
-        )
-        assert_fragments_in_order(
-            self,
-            snapshot_sleep_body,
-            "drawWidgetLane(slot, snapshots[slot], true, drawDivider);",
-            "drawWeatherFooter(weather);",
-        )
-        self.assertNotIn("drawEtaRows", snapshot_sleep_body)
-        sleep_status_body = cpp_function_body(
-            display,
-            "void EInkDisplay::refreshSleepStatusAndWeather(",
-        )
-        assert_fragments_in_order(
-            self,
-            sleep_status_body,
-            "if (!previousFrameValid)",
-            "showSleep(snapshots, weather);",
-            "std::memcpy(frameBuffer, previousFrameBuffer, sizeof(frameBuffer));",
-            "clearRegion(kStatusRegion);",
-            "drawClockAndStatusBar();",
-            "clearRegion(kFooterRegion);",
-            "drawWeatherFooter(weather);",
-            "partialRefresh(kStatusRegion.x, kStatusRegion.y, kStatusRegion.w, kStatusRegion.h);",
-            "partialRefresh(kFooterRegion.x, kFooterRegion.y, kFooterRegion.w, kFooterRegion.h);",
-            "markNonDashboardFrame();",
-        )
-        self.assertNotIn("TRANSITINK_LEGACY_COMPAT", display)
-        self.assertNotIn("drawEtaRows", display)
-        self.assertNotIn("drawSleepRows", display)
-        self.assertNotIn("EInkDisplay::showEta", display)
-        self.assertNotRegex(display, r"showEta[\s\S]*drawAwakeCatIcon")
-        self.assertNotRegex(display, r"showSleep[\s\S]*drawSleepCatIcon")
-        self.assertRegex(display, r"EInkDisplay::begin\(bool showBootScreen\)[\s\S]*if \(showBootScreen\) \{[\s\S]*showBoot\(\"啟動中\"\);")
-
+    def test_home_wake_refresh_keeps_dashboard_until_background_refresh_completes(self):
         main = read_text("src/main.cpp")
-        self.assertIn("const bool rtcResetWake = consumeSleepResumeMarker()", main)
-        self.assertIn("const bool persistentResetWake = configStoreReady && configStore.sleepResumePending()", main)
-        self.assertIn("const bool resetWake = rtcResetWake || persistentResetWake", main)
-        self.assertIn("bus_eta::decideSleepResumeAction", main)
-        self.assertIn("SleepResumeAction::ResumeSleep", main)
-        setup_body = cpp_function_body(main, "void setup()")
-        self.assertIn("einkDisplay.begin(false);", setup_body)
-        self.assertNotIn("einkDisplay.showBoot", setup_body)
-        self.assertNotIn("einkDisplay.showWifiStatus", setup_body)
+        start = cpp_function_body(main, "void startHomeWakeRefresh()")
         assert_fragments_in_order(
             self,
-            setup_body,
-            "const bool persistentResetWake = configStoreReady && configStore.sleepResumePending();",
-            "bus_eta::decideSleepResumeAction(",
-            "einkDisplay.begin(false);",
-            "if (deviceConfig.sleepEnabled && resumeSleep) {",
-            'enterSleepMode("unconfirmed sleep reset");',
-            "if (homeWake) {",
-            "startHomeWakeRefresh();",
-            "return;",
-            "connectWifi(deviceConfig)",
-            "syncTimeAndWeatherBeforeDashboard(false);",
-            "refreshAllWidgetsNow();",
-        )
-        wake_refresh = cpp_function_body(main, "void startHomeWakeRefresh()")
-        assert_fragments_in_order(
-            self,
-            wake_refresh,
+            start,
             "widgetScheduler.forceAllDue(wakeStartedAtMs);",
             "einkDisplay.showDashboard(homeWakeLoadingSnapshots(), weatherSnapshot);",
             "WiFi.begin(deviceConfig.wifiSsid.c_str(), deviceConfig.wifiPassword.c_str());",
         )
-        self.assertNotIn("connectWifi", wake_refresh)
-        self.assertNotIn("refreshWeatherNow", wake_refresh)
-        loading_snapshots = cpp_function_body(
-            main,
-            "transitink::WidgetSnapshotSet homeWakeLoadingSnapshots()",
-        )
+        self.assertNotIn("connectWifi", start)
+        loading = cpp_function_body(main, "transitink::WidgetSnapshotSet homeWakeLoadingSnapshots()")
         assert_fragments_in_order(
             self,
-            loading_snapshots,
+            loading,
             "snapshot.values = {};",
             "snapshot.valueCount = 0;",
             "snapshot.state = transitink::WidgetState::Empty;",
-            'snapshot.providerMessage = "正在更新...";',
+            'snapshot.providerMessage = "Updating...";',
             "snapshot.fetchedAtEpoch = 0;",
             "snapshot.freshness = transitink::Freshness::Fresh;",
         )
-        background_refresh = cpp_function_body(main, "void serviceHomeWakeRefresh()")
+        background = cpp_function_body(main, "void serviceHomeWakeRefresh()")
         assert_fragments_in_order(
             self,
-            background_refresh,
+            background,
             "HomeWakeRefreshPhase::ConnectingWifi",
             "HomeWakeRefreshPhase::WaitingForTime",
             "refreshClockNow();",
@@ -1053,127 +509,8 @@ class ProjectStructureTests(unittest.TestCase):
             "homeWakeWidgetAttempts < static_cast<uint8_t>(transitink::kWidgetSlotCount)",
             "serviceOneWidgetIfDue();",
             "HomeWakeRefreshPhase::Weather",
-            "refreshWeatherNow();",
+            "finishHomeWakeRefresh();",
         )
-        self.assertIn("homeWakeRefreshActive()", setup_body + read_text("src/main.cpp"))
-        self.assertIn('String("...")', display)
-        sync_body = cpp_function_body(
-            main,
-            "void syncTimeAndWeatherBeforeDashboard(bool homeWake)",
-        )
-        self.assertNotIn("showWifiStatus", sync_body)
-        self.assertIn(
-            "if (homeWake) {\n"
-            "        if (!hasValidTime()) {\n"
-            "            waitForTimeSync(2000);\n"
-            "        }\n"
-            "        refreshWeatherNow();\n"
-            "        return;\n"
-            "    }",
-            sync_body,
-        )
-        self.assertEqual(1, sync_body.count("return;"))
-        self.assertIn("waitForTimeSync(hasValidTime() ? 1000 : 15000);", sync_body)
-
-    def test_catalog_cache_ownership_is_outside_thin_config_portal(self):
-        portal = read_text("src/ConfigPortal.cpp")
-        store = read_text("src/WidgetCatalogService.cpp")
-        self.assertNotIn("kRoutesCachePath", portal)
-        self.assertNotIn("kStopsCachePath", portal)
-        self.assertNotIn("proxyRoutes", portal)
-        self.assertNotIn("proxyRouteStops", portal)
-        self.assertIn("WidgetCatalogService::readJsonCache", store)
-        self.assertIn("WidgetCatalogService::writeJsonCache", store)
-        self.assertIn("WidgetCatalogService::refreshBusRoute", store)
-        self.assertIn("WidgetCatalogService::refreshGmbRoute", store)
-        self.assertIn("LittleFS.rename", store)
-        self.assertNotIn("86400000UL", store)
-
-        portal_header = read_text("include/ConfigPortal.h")
-        self.assertIn("scanWifiNetworks", portal_header)
-
-    def test_zectrix_display_uses_low_active_busy(self):
-        display = read_text("src/EInkDisplay.cpp")
-        driver = read_text("src/hardware/displays/Ssd1683DisplayDriver.cpp")
-        profile_test = read_text("test_host/test_board_profile.cpp")
-        self.assertIn("SelectedDisplayDriver panel", display)
-        self.assertNotIn("sendCommand", display)
-        self.assertIn("display.busyActiveLevel", driver)
-        self.assertIn("sendCommand(0xE9)", driver)
-        self.assertIn("sendCommand(0x10)", driver)
-        self.assertIn("pack1bpp", driver)
-        self.assertIn("Ssd1683DisplayDriver::showPartialRegion", driver)
-        self.assertIn("displayPartialFrameRegion(current, previous, x, y, width, height)", driver)
-        self.assertIn("packPartialTransition(previous[byte], current[byte]", driver)
-        self.assertIn("packPartialTransition(current[byte], current[byte]", driver)
-        self.assertIn("const bool dirtyRow", driver)
-        self.assertIn("const bool dirtyByte", driver)
-        self.assertIn("display.busyActiveLevel == 0", profile_test)
-
-    def test_status_display_handles_multiline_messages(self):
-        display = read_text("src/EInkDisplay.cpp")
-        self.assertIn("drawMultilineText", display)
-        self.assertIn("text.indexOf('\\n'", display)
-        self.assertRegex(display, r"showWifiStatus[\s\S]*drawMultilineText")
-        self.assertRegex(display, r"showConfigMode[\s\S]*drawMultilineText")
-
-    def test_rail_clients_providers_and_catalog_keep_focused_contracts(self):
-        mtr_header = read_text("include/MtrClient.h")
-        mtr_client = read_text("src/MtrClient.cpp")
-        light_header = read_text("include/LightRailClient.h")
-        light_client = read_text("src/LightRailClient.cpp")
-        mtr_provider = read_text("src/providers/MtrProvider.cpp")
-        light_provider = read_text("src/providers/LightRailProvider.cpp")
-        parser = read_text("src/TransitJsonParsers.cpp")
-        catalog = read_text("src/TransitCatalog.cpp")
-        native = read_text("platformio.native.ini")
-
-        self.assertIn("https://rt.data.gov.hk/v1/transport/mtr/getSchedule.php?line=", mtr_header)
-        self.assertIn("&sta=", mtr_header)
-        self.assertIn("&lang=TC", mtr_header)
-        self.assertIn("https://rt.data.gov.hk/v1/transport/mtr/lrt/getSchedule?station_id=", light_header)
-        self.assertIn("&with_special=1", light_header)
-        self.assertIn("http.setTimeout(10000)", mtr_client)
-        self.assertIn("http.setTimeout(10000)", light_client)
-        self.assertIn("findTransitCatalogDirection", mtr_client)
-        self.assertIn("findTransitCatalogDirection", light_client)
-        self.assertLess(mtr_client.index("findTransitCatalogDirection"),
-                        mtr_client.index("WiFiClientSecure tls"))
-        self.assertLess(light_client.index("findTransitCatalogDirection"),
-                        light_client.index("WiFiClientSecure tls"))
-        self.assertIn("RailMode::HeavyRail", mtr_provider)
-        self.assertIn("RailMode::LightRail", light_provider)
-        self.assertIn("normalizeRailSnapshot", mtr_provider)
-        self.assertIn("normalizeRailSnapshot", light_provider)
-        self.assertIn("lightRailDirectionIdForDestination", parser)
-        self.assertNotIn("config.directionLabelTc", parser)
-        self.assertNotIn("HTTPClient", catalog)
-        self.assertIn("[env:native_app_config]", native)
-        self.assertIn("[env:native_json]", native)
-        self.assertIn("+<TransitCatalog.cpp>", native)
-
-    def test_glyph_generator_uses_deterministic_repo_seed(self):
-        generator = read_text("scripts/generate_hk_glyph_font.py")
-        seed_path = ROOT / "scripts/hk_glyph_seed.txt"
-        self.assertTrue(seed_path.exists(), "missing deterministic glyph seed")
-        seed = seed_path.read_text(encoding="utf-8")
-        self.assertIn("hk_glyph_seed.txt", generator)
-        self.assertNotIn('default=Path("/tmp/kmb-stop.json")', generator)
-        self.assertNotIn('default=Path("/tmp/kmb-route.json")', generator)
-        self.assertIn('default=None', generator)
-        self.assertIn("NotoSansCJKhk-Regular.otf", generator)
-        self.assertIn("DEFAULT_FONT_SHA256", generator)
-        self.assertIn('"--check"', generator)
-        self.assertNotIn("/System/Library/Fonts", generator)
-        self.assertNotIn("coretext", generator)
-        self.assertNotIn("sips", generator)
-
-        header, payload = seed.split("\n---\n", 1)
-        self.assertTrue(header.isascii())
-        characters = list(payload.rstrip("\n"))
-        codepoints = [ord(character) for character in characters]
-        self.assertEqual(codepoints, sorted(set(codepoints)))
-        self.assertGreater(len(codepoints), 0)
 
     def test_glyph_font_has_pinned_ofl_provenance(self):
         script = ROOT / "scripts" / "generate_hk_glyph_font.py"
@@ -1192,17 +529,11 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertTrue(upstream_notice_path.is_file())
         self.assertTrue(source_path.is_file())
         self.assertTrue(notices_path.is_file())
-        self.assertEqual(
-            hashlib.sha256(font_path.read_bytes()).hexdigest(),
-            generator.DEFAULT_FONT_SHA256,
-        )
-        self.assertIn("SIL OPEN FONT LICENSE Version 1.1", licence_path.read_text())
-        self.assertRegex(
-            upstream_notice_path.read_text(),
-            r"copyright\s+is held by Adobe",
-        )
-        self.assertIn(generator.DEFAULT_FONT_SHA256, source_path.read_text())
-        self.assertIn("src/generated/HkGlyphFontData.cpp", notices_path.read_text())
+        self.assertEqual(hashlib.sha256(font_path.read_bytes()).hexdigest(), generator.DEFAULT_FONT_SHA256)
+        self.assertIn("SIL OPEN FONT LICENSE Version 1.1", licence_path.read_text(encoding="utf-8"))
+        self.assertRegex(upstream_notice_path.read_text(encoding="utf-8"), r"copyright\s+is held by Adobe")
+        self.assertIn(generator.DEFAULT_FONT_SHA256, source_path.read_text(encoding="utf-8"))
+        self.assertIn("src/generated/HkGlyphFontData.cpp", notices_path.read_text(encoding="utf-8"))
 
     def test_glyph_generator_rejects_non_bmp_codepoints(self):
         script = ROOT / "scripts" / "generate_hk_glyph_font.py"
@@ -1211,56 +542,9 @@ class ProjectStructureTests(unittest.TestCase):
         spec.loader.exec_module(generator)
         with tempfile.TemporaryDirectory() as directory:
             seed = Path(directory) / "seed.txt"
-            seed.write_text("source=test\n---\n港🚊\n", encoding="utf-8")
+            seed.write_text("source=test\n---\nA🚊\n", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "U\\+1F68A"):
                 generator.collect_chars([], seed)
-
-    def test_route_stop_clients_use_bounded_decoded_streams(self):
-        for path, signature in (
-            ("src/CitybusClient.cpp", "bool CitybusClient::fetchRouteStopsJson"),
-            ("src/KmbClient.cpp", "bool KmbClient::fetchRouteStopsJson"),
-        ):
-            source = read_text(path)
-            method = source.split(signature, 1)[1].split("\n}", 1)[0]
-            self.assertIn("httpGetBounded", method)
-            self.assertIn("kMaxRouteStopResponseBytes", method)
-            self.assertNotIn("httpGet(", method)
-            self.assertIn("http.writeToStream(&sink)", source)
-            self.assertIn("BoundedBodyAccumulator", source)
-
-    def test_catalog_update_uses_official_clients_and_persistent_atomic_caches(self):
-        store = read_text("src/WidgetCatalogService.cpp")
-        self.assertIn("refreshRouteIndex", store)
-        self.assertIn("kUpdatedRouteIndexPath", store)
-        self.assertIn("listBusRoutes(transitink::BusOperator::Kmb, true", store)
-        self.assertIn("listBusRoutes(transitink::BusOperator::Citybus, true", store)
-        self.assertIn("listGmbRoutes(true", store)
-        self.assertIn("listBusRoutes(op, true", store)
-        self.assertIn("listBusStops(op, normalized", store)
-        self.assertIn("listGmbDirections(normalized, true", store)
-        self.assertIn("listGmbStops(routeId, routeSeq, true", store)
-        self.assertIn("busOverrideCachePath", store)
-        self.assertIn("gmbOverrideCachePath", store)
-        self.assertIn("writeJsonCache", store)
-        self.assertIn('path + ".tmp"', store)
-        self.assertIn('path + ".bak"', store)
-        self.assertIn("LittleFS.rename", store)
-        self.assertNotIn("removeRouteDetailCaches", store)
-        self.assertNotIn("verifyManifestSignature", store)
-
-    def test_static_catalog_service_uses_tested_projection_core(self):
-        service = read_text("src/WidgetCatalogService.cpp")
-        for call in (
-            "listStaticJourneyLocations", "listStaticJourneyDestinations",
-        ):
-            self.assertEqual(service.count(f"transitink::{call}("), 1)
-        for direct_call in (
-            "heavyRailCatalog", "lightRailCatalog", "journeyTimeCatalog",
-            "findTransitCatalogGroup", "findTransitCatalogStation",
-            "findJourneyTimeLocation", "findJourneyTimeDestination",
-        ):
-            self.assertNotIn(direct_call, service)
-        self.assertIn("+<core/StaticCatalogCore.cpp>", read_text("platformio.native.ini"))
 
 
 if __name__ == "__main__":

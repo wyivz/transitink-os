@@ -41,68 +41,19 @@ struct ProviderResult {
     WidgetSnapshot snapshot;
 };
 
-struct BusEtaRecord {
-    BusOperator operatorId = BusOperator::Kmb;
-    std::string routeId, directionId, serviceType;
+struct TtcEtaRecord {
+    std::string routeId;
     int64_t eventEpoch = 0;
-    std::string destinationLabelTc, remarkTc;
-    bool cancelled = false;
-};
-
-struct GmbEtaRecord {
-    int32_t diffMinutes = -1;
-    std::string remarkTc;
-};
-
-struct GmbEtaPayload {
-    bool enabled = true;
-    std::string descriptionTc;
-    std::vector<GmbEtaRecord> records;
-};
-
-struct RailArrivalRecord {
-    RailMode mode = RailMode::HeavyRail;
-    std::string lineOrRouteId, stationId, directionId;
-    int64_t eventEpoch = 0;
-    std::string destinationLabelTc, platformLabelTc, messageTc;
-    bool cancelled = false;
-    bool valid = true;
-};
-
-enum class JourneyTimeValueKind : uint8_t { Minutes, Status, Unavailable };
-
-struct JourneyTimeRecord {
-    std::string locationId, destinationId;
-    uint16_t minutes = 0;
-    int8_t colourId = -1;
-    int64_t dataEpoch = 0;
-    bool valid = true;
-    JourneyTimeValueKind valueKind = JourneyTimeValueKind::Minutes;
-    int16_t statusCode = 0;
 };
 
 uint32_t refreshIntervalMs(WidgetType type);
 uint32_t staleWindowSeconds(WidgetType type);
 bool deadlineReached(uint32_t nowMs, uint32_t deadlineMs);
 void removeExpiredValues(WidgetSnapshot& snapshot, int64_t nowEpoch);
-std::string displayStopLabelTc(std::string label);
 
-ProviderResult normalizeBusSnapshot(uint8_t slot,
+ProviderResult normalizeTtcSnapshot(uint8_t slot,
                                     const WidgetConfig& config,
-                                    const std::vector<BusEtaRecord>& records,
+                                    const std::vector<TtcEtaRecord>& records,
                                     int64_t nowEpoch);
-ProviderResult normalizeGmbSnapshot(uint8_t slot,
-                                    const WidgetConfig& config,
-                                    const GmbEtaPayload& payload,
-                                    int64_t nowEpoch);
-ProviderResult normalizeRailSnapshot(uint8_t slot,
-                                     const WidgetConfig& config,
-                                     const std::vector<RailArrivalRecord>& records,
-                                     int64_t dataEpoch,
-                                     int64_t nowEpoch);
-ProviderResult normalizeJourneyTimeSnapshot(uint8_t slot,
-                                            const WidgetConfig& config,
-                                            const JourneyTimeRecord& record,
-                                            int64_t nowEpoch);
 
 }  // namespace transitink

@@ -6,11 +6,11 @@
 namespace transitink {
 namespace {
 
-constexpr const char* kExpiredMessage = "資料已逾期";
-constexpr const char* kUnavailableMessage = "暫未能取得資料";
-constexpr const char* kInvalidConfigMessage = "設定不完整";
-constexpr const char* kEmptyMessage = "暫無班次";
-constexpr const char* kClockUnsyncedMessage = "時間尚未同步";
+constexpr const char* kExpiredMessage = "Data expired";
+constexpr const char* kUnavailableMessage = "Unable to refresh";
+constexpr const char* kInvalidConfigMessage = "Incomplete settings";
+constexpr const char* kEmptyMessage = "No upcoming arrivals";
+constexpr const char* kClockUnsyncedMessage = "Clock not synced";
 
 void clearValues(WidgetSnapshot& snapshot) {
     snapshot.values = {};

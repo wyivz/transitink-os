@@ -6,11 +6,10 @@
 #include "AppConfig.h"
 #include "BatteryMonitor.h"
 #include "ConfigStore.h"
-#include "WidgetCatalogService.h"
 
 class ConfigPortal {
 public:
-    ConfigPortal(DeviceConfig& config, ConfigStore& store, WidgetCatalogService& catalog);
+    ConfigPortal(DeviceConfig& config, ConfigStore& store);
 
     void begin(bool forceAp);
     void stop();
@@ -28,29 +27,12 @@ private:
     void sendConfig();
     void saveConfig();
     void scanWifiNetworks();
-    void listBusRoutes();
-    void listBusDirections();
-    void listBusStops();
-    void listGmbRoutes();
-    void listGmbDirections();
-    void listGmbStops();
-    void listRailLines();
-    void listRailStations();
-    void listRailDirections();
-    void listJourneyLocations();
-    void listJourneyDestinations();
     void serveEmbeddedCatalog(const char* assetPath);
-    void readUpdatedRouteIndex();
-    void refreshRouteIndex();
-    void readRouteOverride();
-    void refreshRoute();
-    void sendCatalogResult(bool ok, const String& json, const String& error);
     void sendText(int code, const String& contentType, const String& body);
     IPAddress portalIp() const;
 
     DeviceConfig& config_;
     ConfigStore& store_;
-    WidgetCatalogService& catalog_;
     BatteryMonitor batteryMonitor_;
     WebServer server_;
     DNSServer dns_;

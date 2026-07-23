@@ -3,14 +3,22 @@
 #include <ArduinoJson.h>
 #include <WiFi.h>
 #include <esp_system.h>
+#include <cstring>
 
 #include "ProductConfig.h"
 #include "PortalConfigCodec.h"
 #include "TransitInkPortalPage.h"
 #include "core/PortalRequestAuth.h"
-#include "generated/TransitCatalogAssets.h"
+#include "generated/TransitTtcCatalogAssets.h"
 
 namespace {
+
+String chipSuffix() {
+    char suffix[7];
+    snprintf(suffix, sizeof(suffix), "%06X",
+             static_cast<unsigned int>(ESP.getEfuseMac() & 0xFFFFFF));
+    return String(suffix);
+}
 
 constexpr byte kDnsPort = 53;
 const char* kRequestHeaders[] = {
@@ -26,26 +34,13 @@ String generateCsrfToken() {
     return String(token);
 }
 
-String chipSuffix() {
-    const uint64_t mac = ESP.getEfuseMac();
-    char suffix[7];
-    snprintf(suffix, sizeof(suffix), "%06X",
-             static_cast<unsigned int>(mac & 0xFFFFFF));
-    return String(suffix);
-}
-
 }  // namespace
 
-ConfigPortal::ConfigPortal(DeviceConfig& config,
-                           ConfigStore& store,
-                           WidgetCatalogService& catalog)
-    : config_(config), store_(store), catalog_(catalog), server_(80) {}
+ConfigPortal::ConfigPortal(DeviceConfig& config, ConfigStore& store)
+    : config_(config), store_(store), server_(80) {}
 
 void ConfigPortal::begin(bool forceAp) {
-    const bool catalogReady = catalog_.begin();
     batteryMonitor_.begin();
-    Serial.print("Widget catalog storage: ");
-    Serial.println(catalogReady ? "ready" : "failed");
     const bool useAp = forceAp || WiFi.status() != WL_CONNECTED;
     if (useAp && !apMode_) {
         startAp();
@@ -81,87 +76,34 @@ void ConfigPortal::stop() {
     accessToken_ = "";
 }
 
-void ConfigPortal::loop() {
-    if (!serverStarted_) {
-        return;
-    }
-    if (apMode_) {
-        dns_.processNextRequest();
-    }
-    server_.handleClient();
-}
-
-void ConfigPortal::startAp() {
-    WiFi.disconnect(false, false);
-    WiFi.mode(WIFI_AP);
-    const String ssid = String(CONFIG_AP_PREFIX) + "-" + chipSuffix();
-    apPassword_ = transitink::generatePortalApPassword(
-                      esp_random(), esp_random(), esp_random()).c_str();
-    WiFi.softAP(ssid.c_str(), apPassword_.c_str());
-    dns_.start(kDnsPort, "*", WiFi.softAPIP());
-    apMode_ = true;
-}
-
-IPAddress ConfigPortal::portalIp() const {
-    return apMode_ ? WiFi.softAPIP() : WiFi.localIP();
-}
-
-String ConfigPortal::pageUrl() const {
-    const String base = "http://" + portalIp().toString() + "/";
-    return apMode_ ? base : base + accessToken_;
-}
-
 void ConfigPortal::registerRoutes() {
-    server_.collectHeaders(kRequestHeaders, 4);
-    server_.on("/", HTTP_GET, [this]() { sendIndex(); });
-    server_.on("/generate_204", HTTP_GET, [this]() { sendIndex(); });
-    server_.on("/api/config", HTTP_GET,
-               [this]() { if (authorizePortalRequest(false)) sendConfig(); });
-    server_.on("/api/save", HTTP_POST,
-               [this]() { if (authorizePortalRequest(true)) saveConfig(); });
-    server_.on("/api/wifi", HTTP_GET,
-               [this]() { if (authorizePortalRequest(false)) scanWifiNetworks(); });
-    server_.on("/api/catalog/bus/routes", HTTP_GET,
-               [this]() { if (authorizePortalRequest(false)) listBusRoutes(); });
-    server_.on("/api/catalog/bus/directions", HTTP_GET,
-               [this]() { if (authorizePortalRequest(false)) listBusDirections(); });
-    server_.on("/api/catalog/bus/stops", HTTP_GET,
-               [this]() { if (authorizePortalRequest(false)) listBusStops(); });
-    server_.on("/api/catalog/gmb/routes", HTTP_GET,
-               [this]() { if (authorizePortalRequest(false)) listGmbRoutes(); });
-    server_.on("/api/catalog/gmb/directions", HTTP_GET,
-               [this]() { if (authorizePortalRequest(false)) listGmbDirections(); });
-    server_.on("/api/catalog/gmb/stops", HTTP_GET,
-               [this]() { if (authorizePortalRequest(false)) listGmbStops(); });
-    server_.on("/api/catalog/rail/lines", HTTP_GET,
-               [this]() { if (authorizePortalRequest(false)) listRailLines(); });
-    server_.on("/api/catalog/rail/stations", HTTP_GET,
-               [this]() { if (authorizePortalRequest(false)) listRailStations(); });
-    server_.on("/api/catalog/rail/directions", HTTP_GET,
-               [this]() { if (authorizePortalRequest(false)) listRailDirections(); });
-    server_.on("/api/catalog/journey/locations", HTTP_GET,
-               [this]() { if (authorizePortalRequest(false)) listJourneyLocations(); });
-    server_.on("/api/catalog/journey/destinations", HTTP_GET,
-               [this]() { if (authorizePortalRequest(false)) listJourneyDestinations(); });
-    server_.on("/assets/catalog/current/index.json", HTTP_GET,
-               [this]() { if (authorizePortalRequest(false)) serveEmbeddedCatalog("index.json"); });
-    server_.on("/assets/catalog/current/stops-kmb.json", HTTP_GET,
-               [this]() { if (authorizePortalRequest(false)) serveEmbeddedCatalog("stops-kmb.json"); });
-    server_.on("/assets/catalog/current/stops-ctb.json", HTTP_GET,
-               [this]() { if (authorizePortalRequest(false)) serveEmbeddedCatalog("stops-ctb.json"); });
-    server_.on("/assets/catalog/current/stops-gmb.json", HTTP_GET,
-               [this]() { if (authorizePortalRequest(false)) serveEmbeddedCatalog("stops-gmb.json"); });
-    server_.on("/assets/catalog/current/rail.json", HTTP_GET,
-               [this]() { if (authorizePortalRequest(false)) serveEmbeddedCatalog("rail.json"); });
-    server_.on("/api/catalog/route-index", HTTP_GET,
-               [this]() { if (authorizePortalRequest(false)) readUpdatedRouteIndex(); });
-    server_.on("/api/catalog/update", HTTP_POST,
-               [this]() { if (authorizePortalRequest(true)) refreshRouteIndex(); });
-    server_.on("/api/catalog/route-override", HTTP_GET,
-               [this]() { if (authorizePortalRequest(false)) readRouteOverride(); });
-    server_.on("/api/catalog/route-refresh", HTTP_POST,
-               [this]() { if (authorizePortalRequest(true)) refreshRoute(); });
-    server_.onNotFound([this]() { sendIndex(); });
+    server_.collectHeaders(kRequestHeaders, sizeof(kRequestHeaders) / sizeof(kRequestHeaders[0]));
+    server_.on("/", HTTP_GET, [this]() {
+        if (authorizePortalRequest(false)) sendIndex();
+    });
+    server_.on("/api/config", HTTP_GET, [this]() {
+        if (authorizePortalRequest(false)) sendConfig();
+    });
+    server_.on("/api/config", HTTP_POST, [this]() {
+        if (authorizePortalRequest(true)) saveConfig();
+    });
+    server_.on("/api/wifi/scan", HTTP_GET, [this]() {
+        if (authorizePortalRequest(false)) scanWifiNetworks();
+    });
+    server_.on("/assets/catalog/current/ttc/index.json", HTTP_GET,
+               [this]() { if (authorizePortalRequest(false)) serveEmbeddedCatalog("ttc/index.json"); });
+    server_.on("/assets/catalog/current/ttc/stops-ttc.json", HTTP_GET,
+               [this]() {
+                   if (authorizePortalRequest(false)) serveEmbeddedCatalog("ttc/stops-ttc.json");
+               });
+    server_.onNotFound([this]() {
+        if (!authorizePortalRequest(false)) return;
+        if (apMode_) {
+            sendIndex();
+            return;
+        }
+        sendText(404, "text/plain; charset=utf-8", "Not found");
+    });
 }
 
 bool ConfigPortal::authorizePortalRequest(bool validateOrigin) {
@@ -178,14 +120,8 @@ bool ConfigPortal::authorizePortalRequest(bool validateOrigin) {
         return true;
     }
     server_.sendHeader("Cache-Control", "no-store");
-    sendText(403, "text/plain; charset=utf-8", "設定要求來源不正確");
+    sendText(403, "text/plain; charset=utf-8", "Invalid settings request origin");
     return false;
-}
-
-void ConfigPortal::sendText(int code,
-                            const String& contentType,
-                            const String& body) {
-    server_.send(code, contentType, body);
 }
 
 void ConfigPortal::sendIndex() {
@@ -193,7 +129,7 @@ void ConfigPortal::sendIndex() {
     const String allowedHost = expectedIp.toString();
     if (!serverStarted_ || server_.client().localIP() != expectedIp) {
         server_.sendHeader("Cache-Control", "no-store");
-        sendText(403, "text/plain; charset=utf-8", "設定頁只可經裝置 Wi-Fi 開啟");
+        sendText(403, "text/plain; charset=utf-8", "Settings page is only available on device Wi-Fi");
         return;
     }
     if (!transitink::isPortalRequestSourceAllowed(
@@ -201,10 +137,10 @@ void ConfigPortal::sendIndex() {
         if (apMode_) {
             server_.sendHeader("Location", pageUrl());
             server_.sendHeader("Cache-Control", "no-store");
-            sendText(302, "text/plain; charset=utf-8", "正在前往設定頁");
+            sendText(302, "text/plain; charset=utf-8", "Redirecting to settings");
         } else {
             server_.sendHeader("Cache-Control", "no-store");
-            sendText(403, "text/plain; charset=utf-8", "設定頁網址不正確");
+            sendText(403, "text/plain; charset=utf-8", "Invalid settings URL");
         }
         return;
     }
@@ -214,7 +150,7 @@ void ConfigPortal::sendIndex() {
         if (!transitink::isPortalAccessTokenAuthorized(
                 submittedToken.c_str(), accessToken_.c_str())) {
             server_.sendHeader("Cache-Control", "no-store");
-            sendText(403, "text/plain; charset=utf-8", "請使用裝置畫面的 QR code 開啟設定頁");
+            sendText(403, "text/plain; charset=utf-8", "Open settings with the QR code on the device screen");
             return;
         }
     }
@@ -232,24 +168,6 @@ void ConfigPortal::sendIndex() {
     server_.send_P(200, "text/html; charset=utf-8", kTransitInkPortalHtml);
 }
 
-void ConfigPortal::serveEmbeddedCatalog(const char* assetPath) {
-    for (std::size_t index = 0; index < transitink::kEmbeddedCatalogAssetCount; ++index) {
-        const auto& asset = transitink::kEmbeddedCatalogAssets[index];
-        if (strcmp(asset.path, assetPath) != 0) {
-            continue;
-        }
-        server_.sendHeader("Cache-Control",
-                           strcmp(assetPath, "index.json") == 0
-                               ? "no-cache"
-                               : "public, max-age=31536000, immutable");
-        server_.sendHeader("Content-Encoding", "gzip");
-        server_.send_P(200, "application/json; charset=utf-8",
-                       reinterpret_cast<PGM_P>(asset.data), asset.size);
-        return;
-    }
-    sendText(404, "text/plain; charset=utf-8", "找不到內建交通目錄資源");
-}
-
 void ConfigPortal::sendConfig() {
     server_.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     server_.sendHeader("Pragma", "no-cache");
@@ -260,10 +178,6 @@ void ConfigPortal::sendConfig() {
         sendText(500, "text/plain; charset=utf-8", error);
         return;
     }
-    if (!catalog_.appendStatus(json, error)) {
-        sendText(500, "text/plain; charset=utf-8", error);
-        return;
-    }
     sendText(200, "application/json; charset=utf-8", json);
 }
 
@@ -271,7 +185,7 @@ void ConfigPortal::saveConfig() {
     if (!transitink::isPortalSaveAuthorized(server_.header("Content-Type").c_str(),
                                             server_.header("X-TransitInk-CSRF").c_str(),
                                             csrfToken_.c_str())) {
-        sendText(403, "text/plain; charset=utf-8", "儲存要求驗證失敗");
+        sendText(403, "text/plain; charset=utf-8", "Save request authorization failed");
         return;
     }
     String error;
@@ -279,7 +193,7 @@ void ConfigPortal::saveConfig() {
         sendText(400, "text/plain; charset=utf-8", error);
         return;
     }
-    sendText(200, "text/plain; charset=utf-8", "設定已儲存，裝置正在重新啟動。");
+    sendText(200, "text/plain; charset=utf-8", "Settings saved. Device is restarting.");
     delay(400);
     ESP.restart();
 }
@@ -289,7 +203,7 @@ void ConfigPortal::scanWifiNetworks() {
     if (count < 0) {
         WiFi.scanDelete();
         if (apMode_) WiFi.enableSTA(false);
-        sendText(500, "text/plain; charset=utf-8", "Wi-Fi 掃描失敗");
+        sendText(500, "text/plain; charset=utf-8", "Wi-Fi scan failed");
         return;
     }
     DynamicJsonDocument doc(4096);
@@ -311,7 +225,7 @@ void ConfigPortal::scanWifiNetworks() {
         }
         JsonObject item = data.createNestedObject();
         item["id"] = ssid;
-        item["label_tc"] = ssid;
+        item["label"] = ssid;
         item["rssi"] = WiFi.RSSI(index);
         item["secure"] = WiFi.encryptionType(index) != WIFI_AUTH_OPEN;
     }
@@ -322,227 +236,57 @@ void ConfigPortal::scanWifiNetworks() {
     sendText(200, "application/json; charset=utf-8", json);
 }
 
-void ConfigPortal::sendCatalogResult(bool ok,
-                                     const String& json,
-                                     const String& error) {
-    sendText(ok ? 200 : 400,
-             ok ? "application/json; charset=utf-8" : "text/plain; charset=utf-8",
-             ok ? json : error);
-}
-
-void ConfigPortal::listBusRoutes() {
-    transitink::BusOperator op;
-    String json;
-    String error;
-    if (!parseCatalogBusOperator(server_.arg("operator"), op)) {
-        sendText(400, "text/plain; charset=utf-8", "巴士營辦商設定不正確");
-        return;
-    }
-    sendCatalogResult(catalog_.listBusRoutes(op, server_.arg("refresh") == "1", json, error),
-                      json, error);
-}
-
-void ConfigPortal::listBusDirections() {
-    transitink::BusOperator op;
-    String json;
-    String error;
-    if (!parseCatalogBusOperator(server_.arg("operator"), op) ||
-        server_.arg("route").isEmpty()) {
-        sendText(400, "text/plain; charset=utf-8", "巴士路線查詢參數不正確");
-        return;
-    }
-    sendCatalogResult(catalog_.listBusDirections(op, server_.arg("route"), json, error),
-                      json, error);
-}
-
-void ConfigPortal::listBusStops() {
-    transitink::BusOperator op;
-    String json;
-    String error;
-    if (!parseCatalogBusOperator(server_.arg("operator"), op)) {
-        sendText(400, "text/plain; charset=utf-8", "巴士營辦商設定不正確");
-        return;
-    }
-    sendCatalogResult(catalog_.listBusStops(op, server_.arg("route"),
-                                            server_.arg("direction"),
-                                            server_.arg("service_type"),
-                                            server_.arg("refresh") == "1", json, error),
-                      json, error);
-}
-
-void ConfigPortal::listGmbRoutes() {
-    String json;
-    String error;
-    sendCatalogResult(catalog_.listGmbRoutes(server_.arg("refresh") == "1",
-                                             json, error),
-                      json, error);
-}
-
-void ConfigPortal::listGmbDirections() {
-    String json;
-    String error;
-    if (server_.arg("route").isEmpty()) {
-        sendText(400, "text/plain; charset=utf-8", "專線小巴路線查詢參數不正確");
-        return;
-    }
-    sendCatalogResult(catalog_.listGmbDirections(server_.arg("route"),
-                                                 server_.arg("refresh") == "1",
-                                                 json, error),
-                      json, error);
-}
-
-void ConfigPortal::listGmbStops() {
-    String json;
-    String error;
-    sendCatalogResult(catalog_.listGmbStops(server_.arg("route_id"),
-                                            server_.arg("route_seq"),
-                                            server_.arg("refresh") == "1",
-                                            json, error),
-                      json, error);
-}
-
-void ConfigPortal::listRailLines() {
-    transitink::RailMode mode;
-    String json;
-    String error;
-    if (!parseCatalogRailMode(server_.arg("mode"), mode)) {
-        sendText(400, "text/plain; charset=utf-8", "鐵路類型設定不正確");
-        return;
-    }
-    sendCatalogResult(catalog_.listRailLines(mode, json, error), json, error);
-}
-
-void ConfigPortal::listRailStations() {
-    transitink::RailMode mode;
-    String json;
-    String error;
-    if (!parseCatalogRailMode(server_.arg("mode"), mode)) {
-        sendText(400, "text/plain; charset=utf-8", "鐵路類型設定不正確");
-        return;
-    }
-    sendCatalogResult(catalog_.listRailStations(mode, server_.arg("line"), json, error),
-                      json, error);
-}
-
-void ConfigPortal::listRailDirections() {
-    transitink::RailMode mode;
-    String json;
-    String error;
-    if (!parseCatalogRailMode(server_.arg("mode"), mode)) {
-        sendText(400, "text/plain; charset=utf-8", "鐵路類型設定不正確");
-        return;
-    }
-    sendCatalogResult(catalog_.listRailDirections(mode, server_.arg("line"),
-                                                   server_.arg("station"), json, error),
-                      json, error);
-}
-
-void ConfigPortal::listJourneyLocations() {
-    String json;
-    String error;
-    sendCatalogResult(catalog_.listJourneyLocations(json, error), json, error);
-}
-
-void ConfigPortal::listJourneyDestinations() {
-    String json;
-    String error;
-    sendCatalogResult(catalog_.listJourneyDestinations(server_.arg("location"), json, error),
-                      json, error);
-}
-
-void ConfigPortal::readRouteOverride() {
-    const String kind = server_.arg("kind");
-    const String route = server_.arg("route");
-    String json;
-    String error;
-    bool ok = false;
-    if (kind == "bus") {
-        transitink::BusOperator op;
-        if (!parseCatalogBusOperator(server_.arg("operator"), op)) {
-            sendText(400, "text/plain; charset=utf-8", "巴士營辦商設定不正確");
-            return;
+void ConfigPortal::serveEmbeddedCatalog(const char* assetPath) {
+    for (std::size_t index = 0; index < transitink::kEmbeddedTtcCatalogAssetCount; ++index) {
+        const auto& asset = transitink::kEmbeddedTtcCatalogAssets[index];
+        if (strcmp(asset.path, assetPath) != 0) {
+            continue;
         }
-        ok = catalog_.readBusRouteOverride(op, route, json, error);
-    } else if (kind == "gmb") {
-        ok = catalog_.readGmbRouteOverride(route, json, error);
-    } else {
-        sendText(400, "text/plain; charset=utf-8", "交通路線類型不正確");
+        server_.sendHeader("Cache-Control",
+                           strcmp(assetPath, "ttc/index.json") == 0
+                               ? "no-cache"
+                               : "public, max-age=31536000, immutable");
+        server_.sendHeader("Content-Encoding", "gzip");
+        server_.send_P(200, "application/json; charset=utf-8",
+                       reinterpret_cast<PGM_P>(asset.data), asset.size);
         return;
     }
-    if (!ok && error == "not_found") {
-        sendText(404, "text/plain; charset=utf-8", "沒有此路線的本機更新");
-        return;
-    }
-    sendCatalogResult(ok, json, error);
+    sendText(404, "text/plain; charset=utf-8", "Catalog asset not found");
 }
 
-void ConfigPortal::readUpdatedRouteIndex() {
-    String json;
-    String error;
-    if (!catalog_.readUpdatedRouteIndex(json, error)) {
-        if (error == "not_found") {
-            sendText(404, "text/plain; charset=utf-8", "尚未更新本機路線索引");
-            return;
-        }
-        sendText(500, "text/plain; charset=utf-8", error);
-        return;
-    }
-    sendText(200, "application/json; charset=utf-8", json);
+void ConfigPortal::sendText(int code,
+                            const String& contentType,
+                            const String& body) {
+    server_.send(code, contentType, body);
 }
 
-void ConfigPortal::refreshRouteIndex() {
-    if (!transitink::isPortalSaveAuthorized(server_.header("Content-Type").c_str(),
-                                            server_.header("X-TransitInk-CSRF").c_str(),
-                                            csrfToken_.c_str())) {
-        sendText(403, "text/plain; charset=utf-8", "更新要求驗證失敗");
-        return;
-    }
-    String json;
-    String error;
-    if (!catalog_.refreshRouteIndex(json, error)) {
-        sendText(503, "text/plain; charset=utf-8", error);
-        return;
-    }
-    sendText(200, "application/json; charset=utf-8", json);
+IPAddress ConfigPortal::portalIp() const {
+    return apMode_ ? WiFi.softAPIP() : WiFi.localIP();
 }
 
-void ConfigPortal::refreshRoute() {
-    if (!transitink::isPortalSaveAuthorized(server_.header("Content-Type").c_str(),
-                                            server_.header("X-TransitInk-CSRF").c_str(),
-                                            csrfToken_.c_str())) {
-        sendText(403, "text/plain; charset=utf-8", "更新要求驗證失敗");
-        return;
-    }
-    StaticJsonDocument<512> request;
-    const DeserializationError parseError = deserializeJson(request, server_.arg("plain"));
-    if (parseError || !request.is<JsonObject>()) {
-        sendText(400, "text/plain; charset=utf-8", "更新路線要求格式不正確");
-        return;
-    }
-    const String kind = request["kind"] | "";
-    const String route = request["route"] | "";
-    const bool refreshRouteList = request["refresh_routes"] | true;
-    const bool refreshSharedStops = request["refresh_shared_stops"] | true;
-    String json;
-    String error;
-    bool ok = false;
-    if (kind == "bus") {
-        transitink::BusOperator op;
-        if (!parseCatalogBusOperator(String(request["operator"] | ""), op)) {
-            sendText(400, "text/plain; charset=utf-8", "巴士營辦商設定不正確");
-            return;
-        }
-        ok = catalog_.refreshBusRoute(op, route, refreshRouteList,
-                                      refreshSharedStops, json, error);
-    } else if (kind == "gmb") {
-        ok = catalog_.refreshGmbRoute(route, json, error);
-    } else {
-        sendText(400, "text/plain; charset=utf-8", "交通路線類型不正確");
-        return;
-    }
-    if (!ok) {
-        sendText(503, "text/plain; charset=utf-8", error);
-        return;
-    }
-    sendText(200, "application/json; charset=utf-8", json);
+String ConfigPortal::pageUrl() const {
+    const String base = "http://" + portalIp().toString() + "/";
+    return apMode_ ? base : base + accessToken_;
 }
+
+void ConfigPortal::startAp() {
+    WiFi.disconnect(false, false);
+    WiFi.mode(WIFI_AP);
+    const String ssid = String(CONFIG_AP_PREFIX) + "-" + chipSuffix();
+    apPassword_ = transitink::generatePortalApPassword(
+                      esp_random(), esp_random(), esp_random()).c_str();
+    WiFi.softAP(ssid.c_str(), apPassword_.c_str());
+    dns_.start(kDnsPort, "*", WiFi.softAPIP());
+    apMode_ = true;
+}
+
+void ConfigPortal::loop() {
+    if (!serverStarted_) {
+        return;
+    }
+    if (apMode_) {
+        dns_.processNextRequest();
+    }
+    server_.handleClient();
+}
+

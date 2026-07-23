@@ -266,17 +266,17 @@ void drawStatusBar() {
 String batteryStatusText() {
     bus_eta::BatterySnapshot status = batteryMonitor.read();
     if (!status.valid) {
-        return "電量：未能讀取";
+        return "Battery: unavailable";
     }
-    String text = "電量：" + String(status.percent) + "%";
+    String text = "Battery: " + String(status.percent) + "%";
     if (status.full) {
-        return text + "（已充滿）";
+        return text + " (full)";
     }
     if (status.charging) {
-        return text + "（充電中）";
+        return text + " (charging)";
     }
     if (status.powerPresent) {
-        return text + "（外接電源）";
+        return text + " (powered)";
     }
     return text;
 }
@@ -320,8 +320,8 @@ void drawQrCode(int x, int y, const String& text) {
 
 String currentClockText() {
     constexpr const char* kWeekdayLabels[] = {
-        "星期日", "星期一", "星期二", "星期三",
-        "星期四", "星期五", "星期六",
+        "Sun", "Mon", "Tue", "Wed",
+        "Thu", "Fri", "Sat",
     };
     struct tm tmInfo;
     const time_t now = time(nullptr);
@@ -373,8 +373,8 @@ bool hasEnabledWidget(const transitink::WidgetSnapshotSet& snapshots) {
 }
 
 void drawNoWidgetsHint() {
-    const String title = "尚未設定小工具";
-    const String action = "按 Volume Up 開啟設定頁";
+    const String title = "No widgets configured";
+    const String action = "Press Volume Up for settings";
     drawText(std::max(12, (EINK_WIDTH - measureTextWidth(title)) / 2), 138, title);
     drawText(std::max(12, (EINK_WIDTH - measureTextWidth(action)) / 2), 174, action);
 }
@@ -388,7 +388,7 @@ void drawWidgetLane(uint8_t slot, const transitink::WidgetSnapshot& snapshot, bo
     drawTruncatedText(12, region.y + 20, String(snapshot.title.c_str()), 204);
     drawTruncatedText(12, region.y + 42, String(snapshot.subtitle.c_str()), 204);
 
-    const std::size_t valueLimit = snapshot.type == transitink::WidgetType::JourneyTime ? 1U : 2U;
+    const std::size_t valueLimit = 2U;
     const int firstValueX = valueLimit == 1U ? 270 : 224;
     const int valueSpacing = 88;
     const int valueY = region.y + 20;
@@ -404,7 +404,7 @@ void drawWidgetLane(uint8_t slot, const transitink::WidgetSnapshot& snapshot, bo
     }
 
     if (snapshot.freshness == transitink::Freshness::Stale && snapshot.valueCount == 0) {
-        drawTruncatedText(224, valueY, "暫未能取得資料", 164);
+        drawTruncatedText(224, valueY, "No data", 164);
         drawLaneDivider(region, drawDivider);
         return;
     }
@@ -413,7 +413,7 @@ void drawWidgetLane(uint8_t slot, const transitink::WidgetSnapshot& snapshot, bo
         const String message = snapshot.providerMessage.empty() && snapshot.fetchedAtEpoch == 0
                                    ? String("...")
                                    : (snapshot.providerMessage.empty()
-                                          ? String("暫未能取得資料")
+                                          ? String("No data")
                                           : String(snapshot.providerMessage.c_str()));
         drawTruncatedText(224, valueY, message, 164);
         drawLaneDivider(region, drawDivider);
@@ -424,13 +424,9 @@ void drawWidgetLane(uint8_t slot, const transitink::WidgetSnapshot& snapshot, bo
     for (std::size_t valueIndex = 0; valueIndex < shownValueCount; ++valueIndex) {
         const int valueX = firstValueX + static_cast<int>(valueIndex) * valueSpacing;
         drawTruncatedText(valueX, valueY, String(snapshot.values[valueIndex].text.c_str()), 76);
-        if (snapshot.type == transitink::WidgetType::JourneyTime &&
-            snapshot.freshness == transitink::Freshness::Fresh) {
-            drawTruncatedText(valueX, contextY, String(snapshot.values[valueIndex].context.c_str()), 76);
-        }
     }
     if (snapshot.freshness == transitink::Freshness::Stale) {
-        drawTruncatedText(224, contextY, "資料已逾期", 164);
+        drawTruncatedText(224, contextY, "Stale", 164);
     }
     drawLaneDivider(region, drawDivider);
 }
@@ -514,7 +510,7 @@ void EInkDisplay::begin(bool showBootScreen) {
     canvas.clear();
     panel.begin();
     if (showBootScreen) {
-        showBoot("啟動中");
+        showBoot("Starting");
     }
 }
 
@@ -538,13 +534,13 @@ void EInkDisplay::showBoot(const String& message) {
 void EInkDisplay::showConfigMode(const String& networkName, const String& details, const String& qrUrl) {
     canvas.clear();
     drawStatusBar();
-    drawText(18, 38, String("設定 ") + FIRMWARE_PRODUCT_NAME);
-    drawText(18, 76, "網絡：" + networkName);
+    drawText(18, 38, String("Settings · ") + FIRMWARE_PRODUCT_NAME);
+    drawText(18, 76, "Network: " + networkName);
     drawText(18, 100, batteryStatusText());
-    drawText(18, 124, String("版本：") + FIRMWARE_VERSION);
+    drawText(18, 124, String("Version: ") + FIRMWARE_VERSION);
     drawMultilineText(18, 150, details, 22);
     drawQrCode(258, 92, qrUrl);
-    drawText(18, 260, "完成後按「儲存並重啟」");
+    drawText(18, 260, "Save and restart when finished");
     markNonDashboardFrame();
     fullRefresh();
 }
@@ -552,7 +548,7 @@ void EInkDisplay::showConfigMode(const String& networkName, const String& detail
 void EInkDisplay::showWifiStatus(const String& message) {
     canvas.clear();
     drawStatusBar();
-    drawText(18, 42, "連線狀態");
+    drawText(18, 42, "Connection");
     drawMultilineText(18, 82, message);
     markNonDashboardFrame();
     fullRefresh();

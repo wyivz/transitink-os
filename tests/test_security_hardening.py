@@ -17,10 +17,13 @@ class SecurityHardeningTests(unittest.TestCase):
             for path in (ROOT / "src").rglob("*.cpp")
         )
         self.assertNotIn("setInsecure", sources)
-        self.assertGreaterEqual(sources.count("configureVerifiedTls(tls)"), 13)
+        self.assertEqual(1, sources.count("configureVerifiedTls(tls)"))
         trust = read("include/TransitTlsTrust.h")
-        self.assertIn("Hongkong Post Root CA 3", trust)
-        self.assertIn("5A:2F:C0:3F", trust)
+        self.assertIn("GlobalSign Root CA - R3", trust)
+        self.assertIn("kGlobalSignRootCaR3", trust)
+        self.assertIn("kTransitRootCaBundle = kGlobalSignRootCaR3", trust)
+        self.assertNotIn("Hongkong Post", trust)
+        self.assertNotIn("5A:2F:C0:3F", trust)
 
     def test_release_platform_and_direct_libraries_are_exactly_pinned(self):
         config = read("platformio.ini")

@@ -1,0 +1,46 @@
+name: TTC catalog
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh-ttc-catalog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Refresh TTC Surface GTFS catalog
+        run: python3 scripts/generate_ttc_route_catalog.py --refresh
+
+      - name: Verify generated assets
+        run: python3 scripts/generate_ttc_route_catalog.py --check
+
+      - name: Create pull request when catalog changed
+        uses: peter-evans/create-pull-request@271a8d937254b77c320f75121ada616ebc9219b0 # v7.0.8
+        with:
+          commit-message: "chore: refresh TTC Surface GTFS stop catalog"
+          title: "chore: refresh TTC Surface GTFS stop catalog"
+          body: |
+            Automated refresh of the reduced TTC Surface GTFS catalog used for
+            on-device stop selection. Live ETAs continue to come from
+            `bustime.ttc.ca/gtfsrt/trips` filtered by `stop_id` on the device.
+          branch: cursor/ttc-catalog-refresh
+          delete-branch: true
+          add-paths: |
+            data/catalog/ttc/**
+            include/generated/TransitTtcCatalogAssets.h
+            src/generated/TransitTtcCatalogAssets.cpp

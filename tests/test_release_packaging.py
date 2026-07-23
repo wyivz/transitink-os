@@ -149,7 +149,8 @@ class ReleasePackagingTests(unittest.TestCase):
         image_source = (ROOT / "installer" / "assets" / "SOURCE.md").read_text(
             encoding="utf-8"
         )
-        for document in (readme, notices, image_source):
+        self.assertRegex(readme, r"not affiliated\s+with or endorsed by Zectrix")
+        for document in (notices, image_source):
             self.assertIn("與 Zectrix 沒有從屬或認可關係", document)
         self.assertIn("1050ddeb3e6be7f435df4df760a7d13e5", image_source)
         self.assertIn("AI-assisted product visual", image_source)

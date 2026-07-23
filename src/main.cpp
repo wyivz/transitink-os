@@ -13,49 +13,27 @@
 #include "BatteryMonitor.h"
 #include "ConfigPortal.h"
 #include "ConfigStore.h"
-#include "CitybusClient.h"
 #include "EInkDisplay.h"
-#include "GmbClient.h"
-#include "JourneyTimeClient.h"
-#include "KmbClient.h"
-#include "LightRailClient.h"
-#include "MtrClient.h"
 #include "ProductConfig.h"
-#include "WeatherClient.h"
-#include "WidgetCatalogService.h"
+#include "TtcClient.h"
+#include "WeatherSnapshot.h"
 #include "core/BusEtaCore.h"
 #include "core/WidgetScheduler.h"
 #include "hardware/BoardProfile.h"
 #include "hardware/BoardSupport.h"
-#include "providers/BusProvider.h"
-#include "providers/GmbProvider.h"
-#include "providers/JourneyTimeProvider.h"
-#include "providers/LightRailProvider.h"
-#include "providers/MtrProvider.h"
+#include "providers/TtcProvider.h"
 #include "providers/WidgetProviderRouter.h"
 
 ConfigStore configStore;
 BatteryMonitor chargeMonitor;
 DeviceConfig deviceConfig;
-KmbClient kmbClient;
-CitybusClient citybusClient;
-GmbClient gmbClient;
-MtrClient mtrClient;
-LightRailClient lightRailClient;
-JourneyTimeClient journeyTimeClient;
-BusProvider busProvider(kmbClient, citybusClient);
-GmbProvider gmbProvider(gmbClient);
-MtrProvider mtrProvider(mtrClient);
-LightRailProvider lightRailProvider(lightRailClient);
-JourneyTimeProvider journeyTimeProvider(journeyTimeClient);
-WidgetProviderRouter widgetProviderRouter(
-    busProvider, gmbProvider, mtrProvider, lightRailProvider, journeyTimeProvider);
+TtcClient ttcClient;
+TtcProvider ttcProvider(ttcClient);
+WidgetProviderRouter widgetProviderRouter(ttcProvider);
 transitink::WidgetScheduler widgetScheduler(widgetProviderRouter);
-WidgetCatalogService widgetCatalogService(kmbClient, citybusClient, gmbClient);
-WeatherClient weatherClient;
 WeatherSnapshot weatherSnapshot;
 EInkDisplay einkDisplay;
-ConfigPortal configPortal(deviceConfig, configStore, widgetCatalogService);
+ConfigPortal configPortal(deviceConfig, configStore);
 
 unsigned long nextClockRefreshMs = 0;
 unsigned long nextWeatherRefreshMs = 0;
@@ -164,16 +142,14 @@ bool hasValidTime() {
 }
 
 void syncTimeAndWeatherBeforeDashboard(bool homeWake) {
-    configTzTime("HKT-8", "pool.ntp.org", "time.cloudflare.com", "time.nist.gov");
+    configTzTime("EST5EDT,M3.2.0,M11.1.0", "pool.ntp.org", "time.cloudflare.com", "time.nist.gov");
     if (homeWake) {
         if (!hasValidTime()) {
             waitForTimeSync(2000);
         }
-        refreshWeatherNow();
         return;
     }
     waitForTimeSync(hasValidTime() ? 1000 : 15000);
-    refreshWeatherNow();
 }
 
 uint32_t secondsUntilNextMinute(time_t now) {
@@ -203,25 +179,8 @@ void scheduleNextWeatherRefresh(uint32_t seconds = WEATHER_REFRESH_SECONDS) {
 }
 
 void refreshWeatherNow() {
-    Serial.println("Weather refresh start");
-    if (WiFi.status() != WL_CONNECTED) {
-        weatherSnapshot.valid = false;
-        weatherSnapshot.error = "Wi-Fi 未連接";
-        scheduleNextWeatherRefresh(60);
-        if (dashboardVisible) {
-            einkDisplay.refreshWeatherFooter(currentDisplaySnapshots(), weatherSnapshot);
-        }
-        return;
-    }
-
-    String error;
-    bool ok = weatherClient.fetchCurrentWeather(deviceConfig.weatherLocationTc, weatherSnapshot, error);
-    Serial.print("Weather refresh ok: ");
-    Serial.println(ok ? "yes" : "no");
-    if (!ok) {
-        Serial.print("Weather error: ");
-        Serial.println(error);
-    }
+    // TTC-only build: weather footer retained for layout, but no remote fetch.
+    weatherSnapshot = WeatherSnapshot{};
     scheduleNextWeatherRefresh();
     if (dashboardVisible) {
         einkDisplay.refreshWeatherFooter(currentDisplaySnapshots(), weatherSnapshot);
@@ -242,7 +201,7 @@ transitink::WidgetSnapshotSet homeWakeLoadingSnapshots() {
         snapshot.values = {};
         snapshot.valueCount = 0;
         snapshot.state = transitink::WidgetState::Empty;
-        snapshot.providerMessage = "正在更新...";
+        snapshot.providerMessage = "Updating...";
         snapshot.fetchedAtEpoch = 0;
         snapshot.dataAtEpoch = 0;
         snapshot.freshness = transitink::Freshness::Fresh;
@@ -302,10 +261,6 @@ void startHomeWakeRefresh() {
     scheduleNextClockRefresh();
 
     if (deviceConfig.wifiSsid.isEmpty()) {
-        weatherSnapshot.valid = false;
-        weatherSnapshot.error = "Wi-Fi 未連接";
-        scheduleNextWeatherRefresh(60);
-        homeWakeRefreshPhase = HomeWakeRefreshPhase::Weather;
         finishHomeWakeRefresh();
         return;
     }
@@ -325,16 +280,13 @@ void serviceHomeWakeRefresh() {
         case HomeWakeRefreshPhase::ConnectingWifi:
             if (WiFi.status() == WL_CONNECTED) {
                 Serial.println("Home wake: Wi-Fi connected");
-                configTzTime("HKT-8", "pool.ntp.org", "time.cloudflare.com", "time.nist.gov");
+                configTzTime("EST5EDT,M3.2.0,M11.1.0", "pool.ntp.org", "time.cloudflare.com", "time.nist.gov");
                 homeWakePhaseStartedMs = nowMs;
                 homeWakeRefreshPhase = HomeWakeRefreshPhase::WaitingForTime;
                 return;
             }
             if (nowMs - homeWakePhaseStartedMs >= kHomeWakeWifiTimeoutMs) {
                 Serial.println("Home wake: Wi-Fi connection timed out");
-                weatherSnapshot.valid = false;
-                weatherSnapshot.error = "Wi-Fi 未連接";
-                scheduleNextWeatherRefresh(60);
                 finishHomeWakeRefresh();
             }
             return;
@@ -357,10 +309,9 @@ void serviceHomeWakeRefresh() {
                 serviceOneWidgetIfDue();
                 return;
             }
-            homeWakeRefreshPhase = HomeWakeRefreshPhase::Weather;
+            finishHomeWakeRefresh();
             return;
         case HomeWakeRefreshPhase::Weather:
-            refreshWeatherNow();
             finishHomeWakeRefresh();
             return;
     }
@@ -482,10 +433,6 @@ void performLightSleepMaintenance() {
     bool wifiOk = connectWifi(deviceConfig);
     if (wifiOk) {
         syncTimeAndWeatherBeforeDashboard(false);
-    } else {
-        weatherSnapshot.valid = false;
-        weatherSnapshot.error = "Wi-Fi 未連接";
-        scheduleNextWeatherRefresh(60);
     }
     stopNetworkForSleep();
     einkDisplay.refreshSleepStatusAndWeather(currentDisplaySnapshots(), weatherSnapshot);
@@ -585,7 +532,7 @@ void applyFactoryReset() {
     if (LittleFS.begin(true)) {
         LittleFS.format();
     }
-    einkDisplay.showWifiStatus("已重設裝置\n放開音量鍵後重啟");
+    einkDisplay.showWifiStatus("Device reset\nRelease volume keys to reboot");
 }
 
 void serviceFactoryResetButtons() {
@@ -612,13 +559,13 @@ void showConfigAccessScreen() {
     dashboardVisible = false;
     const String configUrl = configPortal.pageUrl();
     if (configPortal.isApMode()) {
-        const String message = "密碼：" + configPortal.apPassword() +
-                               "\n開啟 " + configUrl;
+        const String message = "Password: " + configPortal.apPassword() +
+                               "\nOpen " + configUrl;
         einkDisplay.showConfigMode(configApSsid(), message, configUrl);
         return;
     }
     const String localUrl = "http://" + WiFi.localIP().toString() + "/";
-    const String message = "本機設定頁\n" + localUrl;
+    const String message = "Local settings\n" + localUrl;
     einkDisplay.showConfigMode(deviceConfig.wifiSsid, message, configUrl);
 }
 
@@ -683,7 +630,7 @@ void serviceChargeStatus(bool force) {
 void setup() {
     Serial.begin(115200);
     delay(200);
-    setenv("TZ", "HKT-8", 1);
+    setenv("TZ", "EST5EDT,M3.2.0,M11.1.0", 1);
     tzset();
     const esp_sleep_wakeup_cause_t wakeCause = esp_sleep_get_wakeup_cause();
     const esp_reset_reason_t resetReason = esp_reset_reason();
@@ -728,8 +675,8 @@ void setup() {
         const String configUrl = configPortal.pageUrl();
         einkDisplay.showConfigMode(
             configApSsid(),
-            String("密碼：") + configPortal.apPassword() +
-                "\n開啟 " + configUrl,
+            String("Password: ") + configPortal.apPassword() +
+                "\nOpen " + configUrl,
             configUrl);
         return;
     }
@@ -775,10 +722,6 @@ void setup() {
     bool wifiOk = connectWifi(deviceConfig);
     if (wifiOk) {
         syncTimeAndWeatherBeforeDashboard(false);
-    } else {
-        weatherSnapshot.valid = false;
-        weatherSnapshot.error = "Wi-Fi 未連接";
-        scheduleNextWeatherRefresh(60);
     }
 
     Serial.println("Config portal deferred until button press");
@@ -819,9 +762,6 @@ void loop() {
         } else if (homeWakeRefreshActive()) {
             serviceHomeWakeRefresh();
         } else {
-            if (millis() >= nextWeatherRefreshMs) {
-                refreshWeatherNow();
-            }
             if (millis() >= nextClockRefreshMs) {
                 refreshClockNow();
             }
