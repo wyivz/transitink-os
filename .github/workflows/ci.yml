@@ -72,8 +72,12 @@ jobs:
       - name: Verify installer release package
         run: PLATFORMIO_CORE_DIR="$PWD/.platformio" .venv/bin/python scripts/package_installer.py
 
+  # GitHub Dependency review needs Dependency graph enabled on the repo.
+  # Public forks often have it off by default; skip there so PR CI is not blocked.
+  # To run this check on a fork: Settings → Code security → enable Dependency graph,
+  # then remove the `!github.event.repository.fork` guard below.
   dependency-review:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && !github.event.repository.fork
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
