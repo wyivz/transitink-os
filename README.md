@@ -3,10 +3,11 @@
 [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial-blue.svg)](LICENSE)
 [![Platform: ESP32-S3](https://img.shields.io/badge/Platform-ESP32--S3-green.svg)](https://www.espressif.com/)
 
-TransitInk OS （TTC Edition) is an ESP32-S3 firmware designed for a **400×300 e-paper arrival dashboard**. 
+TransitInk OS (TTC Edition) is an ESP32-S3 firmware designed for a **400×300 e-paper arrival dashboard**.
 
 This repository is a **Toronto TTC-only edition**: it fetches and displays live bus and streetcar arrival countdowns across four customizable widget slots, featuring a localized, on-device English settings portal.
 
+TransitInk OS is an independent source-available project and is not affiliated with or endorsed by Zectrix, the Toronto Transit Commission, or the City of Toronto.
 
 ## Relationship to the original project
 
