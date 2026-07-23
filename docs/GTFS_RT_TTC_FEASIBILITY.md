@@ -5,6 +5,78 @@
 [TTC GTFS-RT](https://open.toronto.ca/dataset/ttc-gtfs-realtime-gtfs-rt/)
 的可行性。评估基于仓库现状与 2026-07-23 对公开端点的实测。
 
+## 0. 白话：要在这块硬件上做「和现在一样的到站屏」，该怎么做
+
+### 你现在香港版在干什么（一句话）
+
+选好「哪条线 + 哪个站」→ 设备每隔约 1 分钟问服务器「这站下一班还有几分钟」→ 墨水屏显示倒计时。
+
+### TTC 和香港的差别（为什么不能直接改个 URL）
+
+| | 香港（现有） | TTC（官方） |
+| --- | --- | --- |
+| 问法 | 「只要这一站」 | 「给你全市所有车的预测，自己挑站」 |
+| 每次下载 | 大约几百字节 | TripUpdates 大约 **130 KB** |
+| 格式 | JSON（ArduinoJson 已支持） | **protobuf**（要另加解析库） |
+| 站名路线目录 | 已有精简包 | 完整 Surface GTFS 约 **80 MB**，必须自己裁成小包 |
+
+所以：**同等功能能做**；但不是换个 endpoint，而是要加一层「按站过滤」。
+
+### 推荐做法（对这块 ESP32 最省事）
+
+**在云端或家里跑一个很小的代理**，设备仍像现在一样只请求「一站的 JSON」。
+
+```text
+墨水屏设备                         你的小代理（Cloudflare Worker / 小 VPS）
+─────────                         ────────────────────────────────────
+配置：TTC stop_id + route_id       每 30–60s 拉一次
+刷新时 GET /eta?stop=8431&route=306   https://bustime.ttc.ca/gtfsrt/trips
+                                    按 stop_id（可选 route_id）过滤
+←── 返回约 100–200 字节 JSON ─────── 只留下下一两班的 epoch/分钟数
+显示倒计时（复用现有 WidgetSnapshot）
+```
+
+2026-07-23 实测：从全市 TripUpdates 里筛出一个站，可得到与香港同量级的响应，例如：
+
+```json
+{"stop_id":"8431","arrivals":[{"route_id":"305","epoch":1784793703,"minutes":1},{"route_id":"306","epoch":1784794345,"minutes":12}]}
+```
+
+约 **146 字节**。设备侧几乎就是再写一个 `TtcClient`，和现有 `KmbClient` 同级。
+
+**为什么推荐代理而不是设备直接啃 130KB：**
+
+- 省电、省 RAM、少引入 nanopb
+- 4 个槽位共享一次全市下载（代理做一次即可）
+- 固件仍保持「站点级小 JSON」架构，改动最小
+
+### 备选做法（不依赖你自己的服务器）
+
+设备直连 `https://bustime.ttc.ca/gtfsrt/trips`：
+
+1. 每刷新周期**只下载一次**（四个槽共用）
+2. 用 nanopb **边下边筛** 自己配置的 `stop_id`
+3. 转成现有 `WidgetSnapshot` 倒计时
+
+能做，但固件更重；适合想完全离线自托管、不愿养代理的人。
+
+### 不推荐当主路径的数据源
+
+| 来源 | 原因 |
+| --- | --- |
+| 旧 NextBus / UmoIQ XML | 官方要求迁走，已不适合新产品 |
+| Clever `bustime/api/v3/getpredictions` | 需要 API key，公开 TEST key 无效 |
+| `ttc.ca/ttcapi/.../GetNextBuses` | 非公开契约，易变；实测常返回 `[]` |
+
+**结论：官方可靠实时源就是 BusTime GTFS-RT；「更好用」的方式是把它变成站点级小 JSON（代理或机上过滤），而不是另找未公开 API。**
+
+### 设备上还要补的两块（和香港一样）
+
+1. **选站目录**：从 TTC Surface GTFS 裁出 routes/stops/站序小包，塞进固件或 LittleFS（不能塞 80MB 原包）。  
+2. **TLS**：信任 `*.ttc.ca` 的 GlobalSign（现固件只钉了香港邮证 CA）。
+
+地铁完整到站不在同一套 surface GTFS-RT 里；首版按 **巴士 + 有轨电车** 做，才能和「香港巴士 ETA」对等。
+
 ## 1. 结论（先读）
 
 | 问题 | 结论 |
@@ -12,9 +84,9 @@
 | 当前是否已有 GTFS / GTFS-RT？ | **没有**。实时层是香港运营商 REST JSON/XML 适配器。 |
 | 能否“改用通用 GTFS-RT”直接替换现有香港栈？ | **不适合整仓替换**。显示契约可复用，但配置、目录、TLS、客户端语义都是香港专用。 |
 | 能否以附加 Provider 适配 TTC？ | **技术上可行，成本高**。核心产品语义（站点到站倒计时）可用 TripUpdates 推导，但嵌入式约束显著。 |
-| 推荐策略 | **保留香港栈**；若要做 TTC，以「区域配置 / 新 Widget 类型 + 通用 TripUpdate→Snapshot 适配器」增量引入，并强制共享 feed 缓存与静态 GTFS 缩减目录。 |
+| 推荐策略 | **同等功能优先走「GTFS-RT → 站点 JSON 代理 + 新 TtcClient」**；若坚持纯机上，再做共享缓存的 TripUpdate Provider。保留香港栈。 |
 
-**可行性等级：有条件可行（additive adapter），非整仓泛化。**
+**可行性等级：有条件可行（additive adapter），非整仓泛化。同等产品体验最稳妥的落地是站点级代理。**
 
 ---
 
@@ -226,26 +298,20 @@ Open Toronto 上部分数据集页面呈现 Retired，但 BusTime 端点仍在�
 
 ## 5. 若实施的建议路径
 
-按侵入性递增：
+优先做「同等到站功能」时，按这条顺序：
 
-### 阶段 A — 验证原型（主机侧）
+### 路径 1（推荐）— 站点 JSON 代理 + 固件薄客户端
 
-1. 用主机测试解码 `bustime.ttc.ca/gtfsrt/trips`，按给定 `stop_id` 抽出下一两班。  
-2. 确认字段完备度（是否总有 `arrival.time`、`stop_id`、`route_id`、NEW trip 比例）。  
-3. 不改固件行为，只加 `test_host` fixture 与解析模块。
+1. 写一个 Worker/小服务：定时拉 `bustime.ttc.ca/gtfsrt/trips`，按 `stop_id`/`route_id` 过滤，输出香港式小 JSON。  
+2. 固件新增 `TtcClient` + `WidgetType`（或 `BusOperator::Ttc`），复用 `normalizeBusSnapshot` / 同类倒计时逻辑。  
+3. 门户选站：先可手工填 `stop_id`；再补 Surface GTFS 缩减目录。  
+4. TLS：设备需能连你的代理域名（若代理用常见 CA，比直连 TTC 更简单）。
 
-### 阶段 B — 固件增量 Provider
+### 路径 2 — 设备直连 GTFS-RT
 
-1. 新增 `WidgetType::GtfsEta`（或 `BusEta` 下 `BusOperator::Gtfs` / 区域 profile）。  
-2. `GtfsRtClient`：流式 HTTPS + nanopb；全局 `TripUpdateCache`（TTL ≈ 刷新间隔）。  
-3. `normalizeGtfsSnapshot()` → 复用现有两行倒计时 UI。  
-4. TLS：按区域选择 Hongkong Post vs GlobalSign（或系统信任包，需评估 flash）。  
-
-### 阶段 C — TTC 目录与门户
-
-1. 新生成脚本：从 TTC Surface GTFS 投影 `index` + `stops-ttc`（仅 surface）。  
-2. 门户：英语标签路径或最小英/中切换；避免把 TTC 站名硬塞进现有繁中文案假设。  
-3. 更新 `THIRD_PARTY_DATA.md` 署名与刷新策略。
+1. 主机侧先验证按站过滤（已用公开 feed 验证可行）。  
+2. 固件：nanopb 流式解码 + 四槽共享 feed 缓存。  
+3. 同样需要缩减静态目录与 GlobalSign 信任。
 
 ### 明确不做（首版）
 
@@ -253,6 +319,7 @@ Open Toronto 上部分数据集页面呈现 Retired，但 BusTime 端点仍在�
 - 完整 Service Alerts 时间线  
 - 地铁完整 ETA  
 - 用 GTFS-RT 替换香港运营商客户端  
+- 依赖未公开的 `ttc.ca` 网页 JSON 或需申请的 Clever predictions key  
 
 ---
 
