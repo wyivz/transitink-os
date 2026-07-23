@@ -1,4 +1,4 @@
-// Modified by TransitInk OS, 2026: Traditional Chinese dialog copy and
+// Modified by TransitInk OS, 2026: English dialog copy and
 // same-origin imports. Based on ESP Web Tools 10.2.1 (Apache-2.0).
 // Upstream: https://github.com/esphome/esp-web-tools
 
@@ -15,22 +15,22 @@ let NoPortPickedDialog = class extends LitElement {
   render() {
     return html`
       <ew-dialog open @closed=${this._handleClose}>
-        <div slot="headline">未選擇連接埠</div>
+        <div slot="headline">No port selected</div>
         <div slot="content">
-          <div>如果找不到裝置，請檢查以下事項：</div>
+          <div>If the device is missing, check the following:</div>
           <ol>
-            <li>確認裝置已連接到正在開啟此網頁的電腦。</li>
-            <li>確認裝置已開機；如有電源指示燈，應保持亮起。</li>
-            <li>確認 USB 線支援數據傳輸，不是只供充電的線。</li>
+            <li>Confirm the device is connected to the computer showing this page.</li>
+            <li>Confirm the device is powered on; if it has a power LED, it should stay lit.</li>
+            <li>Confirm the USB cable supports data, not charge-only.</li>
           </ol>
         </div>
         <div slot="actions">
           ${this.doTryAgain
             ? html`
-                <ew-text-button @click=${this.close}>取消</ew-text-button>
-                <ew-text-button @click=${this.tryAgain}>再試一次</ew-text-button>
+                <ew-text-button @click=${this.close}>Cancel</ew-text-button>
+                <ew-text-button @click=${this.tryAgain}>Try again</ew-text-button>
               `
-            : html`<ew-text-button @click=${this.close}>關閉</ew-text-button>`}
+            : html`<ew-text-button @click=${this.close}>Close</ew-text-button>`}
         </div>
       </ew-dialog>
     `;

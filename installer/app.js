@@ -26,8 +26,8 @@ function showReleaseState(state, message) {
 async function loadVersion(manifestUrl) {
   activeManifest = manifestUrl;
   installAction.disabled = true;
-  installAction.textContent = "正在準備安裝資料";
-  showReleaseState("loading", "正在讀取");
+  installAction.textContent = "Preparing install package";
+  showReleaseState("loading", "Loading");
   try {
     const response = await fetch(manifestUrl, { cache: "no-store" });
     if (!response.ok) throw new Error("manifest unavailable");
@@ -37,14 +37,14 @@ async function loadVersion(manifestUrl) {
     }
     if (manifestUrl === activeManifest) {
       installAction.disabled = false;
-      installAction.textContent = "連接裝置並安裝";
+      installAction.textContent = "Connect device and install";
       showReleaseState("ready", manifest.version);
     }
   } catch {
     if (manifestUrl === activeManifest) {
       installAction.disabled = true;
-      installAction.textContent = "安裝資料未能讀取";
-      showReleaseState("error", "未能讀取");
+      installAction.textContent = "Install package unavailable";
+      showReleaseState("error", "Unavailable");
     }
   }
 }
@@ -55,7 +55,7 @@ function applyDevice(device) {
 
   if (typeof device.image === "string" && device.image) {
     fields.heroImage.src = device.image;
-    fields.heroImage.alt = device.image_alt || `${device.name} 裝置產品圖`;
+    fields.heroImage.alt = device.image_alt || `${device.name} product image`;
     fields.heroFigure.hidden = false;
   } else {
     fields.heroFigure.hidden = true;
@@ -65,8 +65,8 @@ function applyDevice(device) {
   if (device.installable === false) {
     activeManifest = "";
     installAction.disabled = true;
-    installAction.textContent = "此裝置尚未提供安裝檔";
-    showReleaseState("error", "尚未發布");
+    installAction.textContent = "No install package for this device";
+    showReleaseState("error", "Not published");
   } else {
     loadVersion(device.manifest);
   }
@@ -108,10 +108,10 @@ try {
       id: "zectrix_note4",
       name: "Zectrix Note 4",
       chip_family: "ESP32-S3",
-      display: "400 × 300 電子紙",
-      connection: "USB-C 數據線",
+      display: "400 × 300 e-paper",
+      connection: "USB-C data cable",
       image: "./assets/zectrix-note4-product.png?v=1050ddeb",
-      image_alt: "顯示 TransitInk OS 交通資訊的 Zectrix Note 4 裝置產品圖",
+      image_alt: "Zectrix Note 4 showing a TransitInk OS transit dashboard",
       manifest: "./manifest.json",
       installable: true,
     },

@@ -26,7 +26,7 @@ licence, version, and source hashes in `lib/yxml/LICENSE`.
 
 The browser distribution of ESP Web Tools 10.2.1 is vendored under
 `installer/esp-web-tools/` so the installer does not execute CDN-hosted code.
-Its npm package digest and local Traditional Chinese dialog patch are recorded
+Its npm package digest and local English dialog patch are recorded
 in `installer/esp-web-tools/README.md`; the upstream Apache-2.0 licence is
 retained in `installer/esp-web-tools/LICENSE`. Components compiled into the
 browser bundle, including Lit, Material Web, esptool-js, pako, tslib,
@@ -35,9 +35,9 @@ atob-lite, and Improv Wi-Fi Serial SDK, are listed in
 under `third_party/licenses/`.
 
 `installer/esp-web-tools/vendor/install-button.js` and
-`installer/esp-web-tools/no-port-dialog-zh.js` carry prominent modification
-notices. TransitInk changes only the no-port dialog import, its Traditional
-Chinese copy, and same-origin module paths.
+`installer/esp-web-tools/no-port-dialog-en.js` carry prominent modification
+notices. TransitInk changes the no-port dialog import, its English copy, and
+same-origin module paths.
 
 ## Firmware framework and libraries
 
@@ -83,9 +83,9 @@ name, trademarks, or product design beyond descriptive use.
 ## Trademarks and non-endorsement
 
 TransitInk OS is an independent source-available project and is not affiliated
-with or endorsed by Zectrix. TransitInk OS 是獨立原始碼公開專案，與 Zectrix 沒有從屬或認可關係。
-Zectrix and all other third-party names and marks are
-the property of their respective owners. Their use identifies compatible
+with or endorsed by Zectrix, the Toronto Transit Commission, or the City of
+Toronto. Zectrix, TTC, and all other third-party names and marks are the
+property of their respective owners. Their use identifies compatible
 hardware or data sources and does not imply sponsorship or endorsement.
 
 ## Release distribution

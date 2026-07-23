@@ -33,7 +33,7 @@ class SecurityHardeningTests(unittest.TestCase):
 
     def test_installer_executes_no_remote_scripts(self):
         page = read("installer/index.html")
-        dialog = read("installer/esp-web-tools/no-port-dialog-zh.js")
+        dialog = read("installer/esp-web-tools/no-port-dialog-en.js")
         self.assertIn("Content-Security-Policy", page)
         self.assertNotRegex(page, r'<script[^>]+src="https?://')
         self.assertNotRegex(dialog, r'from\s+["\']https?://')

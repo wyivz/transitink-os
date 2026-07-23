@@ -32,9 +32,9 @@ constexpr CandidatePin kCandidatePins[] = {
 };
 
 constexpr ButtonStep kButtonSteps[] = {
-    {"針孔鍵", "pinhole", true},
-    {"音量上", "vol_up", false},
-    {"音量下", "vol_down", false},
+    {"Pinhole", "pinhole", true},
+    {"Volume Up", "vol_up", false},
+    {"Volume Down", "vol_down", false},
     {"Home Button", "home", false},
 };
 
@@ -67,11 +67,11 @@ void saveMapping(const ButtonStep& step, const String& mapping) {
 void printSummary() {
     Serial.println();
     Serial.println("=== Button map summary ===");
-    String summary = "按鍵結果\n";
+    String summary = "Button map\n";
     for (int i = 0; i < kStepCount; ++i) {
         String key = "map_";
         key += kButtonSteps[i].key;
-        String value = preferences.getString(key.c_str(), "未偵測");
+        String value = preferences.getString(key.c_str(), "Not detected");
         Serial.print(kButtonSteps[i].label);
         Serial.print(" => ");
         Serial.println(value);
@@ -133,16 +133,18 @@ void runStep() {
     const ButtonStep& step = kButtonSteps[stepIndex];
     String prompt = "Press the requested button\n";
     prompt += step.label;
-    prompt += "\n30 秒內按一下";
+    prompt += "\nPress once within 30 seconds";
     if (step.pinhole) {
-        prompt += "\n如裝置重啟，這粒是硬件 Reset/EN";
+        prompt += "\nIf the device reboots, that control is hardware Reset/EN";
     }
     showMessage(prompt);
     captureBaseline();
 
     String detected = detectChangedPin();
     if (detected.length() == 0) {
-        detected = step.pinhole ? "未偵測 GPIO；如按下時重啟，即硬件 Reset/EN" : "未偵測";
+        detected = step.pinhole
+                       ? "No GPIO change; reboot on press means hardware Reset/EN"
+                       : "Not detected";
     }
     saveMapping(step, detected);
     preferences.putInt("step", stepIndex + 1);

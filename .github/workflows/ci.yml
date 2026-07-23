@@ -54,7 +54,7 @@ jobs:
       - name: Audit Python build tools
         run: scripts/audit_python_tools.sh
 
-      - name: Verify pinned Traditional Chinese glyph data
+      - name: Verify pinned bitmap glyph data
         run: .venv/bin/python scripts/generate_hk_glyph_font.py --check
 
       - name: Verify embedded TTC catalog

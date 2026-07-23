@@ -54,8 +54,10 @@ def collect_chars(paths, seed_path):
             for key, value in row.items():
                 if not isinstance(value, str):
                     continue
+                # TTC edition: ignore legacy *_tc Hong Kong label fields if present.
                 if key.endswith("_tc") or key in {"name_tc", "orig_tc", "dest_tc"}:
-                    chars.update(ch for ch in value if should_include(ch))
+                    continue
+                chars.update(ch for ch in value if should_include(ch))
 
     for path in list((ROOT / "src").rglob("*")) + list((ROOT / "include").rglob("*")):
         if path.suffix not in {".cpp", ".h"} or path == GENERATED_SOURCE:

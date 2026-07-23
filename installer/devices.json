@@ -6,10 +6,10 @@
       "name": "Zectrix Note 4",
       "status": "supported",
       "chip_family": "ESP32-S3",
-      "display": "400 × 300 電子紙",
-      "connection": "USB-C 數據線",
+      "display": "400 × 300 e-paper",
+      "connection": "USB-C data cable",
       "image": "./assets/zectrix-note4-product.png?v=1050ddeb",
-      "image_alt": "顯示 TransitInk OS 交通資訊的 Zectrix Note 4 裝置產品圖",
+      "image_alt": "Zectrix Note 4 showing a TransitInk OS transit dashboard",
       "manifest": "./manifest.json",
       "installable": true
     }

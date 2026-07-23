@@ -22,7 +22,8 @@ int glyphWidth(uint32_t codepoint, void* context) {
     if (codepoint == 0x2603 || codepoint == '\r' || codepoint == '\n') {
         return 0;
     }
-    if (codepoint >= 0x4E00 && codepoint <= 0x9FFF) {
+    // Treat non-ASCII as wide glyphs for truncation tests.
+    if (codepoint > 0x7F) {
         return 8;
     }
     return 4;
@@ -43,7 +44,8 @@ int main() {
     Widths widths;
 
     assertPlan(transitink::planTruncatedUtf8("AB", 8, glyphWidth, &widths), "AB", 8, 8);
-    assertPlan(transitink::planTruncatedUtf8("港鐵", 16, glyphWidth, &widths), "港鐵", 16, 16);
+    // Two-byte UTF-8 sample characters (U+00C5 U+00C9), each mocked as width 8.
+    assertPlan(transitink::planTruncatedUtf8("ÅÉ", 16, glyphWidth, &widths), "ÅÉ", 16, 16);
     assertPlan(transitink::planTruncatedUtf8("ABCDE", 10, glyphWidth, &widths), "A…", 10, 10);
 
     widths.ellipsis = 0;
@@ -55,8 +57,8 @@ int main() {
     assertPlan(transitink::planTruncatedUtf8("A☃B", 8, glyphWidth, &widths), "AB", 8, 8);
 
     widths.ellipsis = 6;
-    const auto multibyte = transitink::planTruncatedUtf8("港鐵A", 14, glyphWidth, &widths);
-    assertPlan(multibyte, "港…", 14, 14);
+    const auto multibyte = transitink::planTruncatedUtf8("ÅÉA", 14, glyphWidth, &widths);
+    assertPlan(multibyte, "Å…", 14, 14);
     assert(multibyte.truncated);
 
     widths.ellipsis = 0;

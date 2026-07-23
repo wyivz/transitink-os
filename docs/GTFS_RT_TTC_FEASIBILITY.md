@@ -1,12 +1,9 @@
 # TransitInk OS TTC GTFS-Realtime notes
 
-> **Current product status:** this branch is TTC-only. Firmware widget types are
-> `Disabled` and `TtcEta` only. Route/stop selection uses the embedded
-> `data/catalog/ttc/` catalog. Live arrivals come from
-> `https://bustime.ttc.ca/gtfsrt/trips` (GTFS-Realtime Trip Updates), filtered
-> on-device by configured `route_id` and `stop_id`. The display keeps the
-> original four-slot e-ink layout; Hong Kong operators, catalogs, weather, and
-> Traditional Chinese product copy are removed.
+> **Product status:** this repository is a TTC-only edition of TransitInk OS.
+> It keeps the original four-slot e-ink dashboard shell and setup/sleep UX, and
+> replaces the Hong Kong transit stack with on-device GTFS-Realtime filtering for
+> Toronto surface routes.
 
 ## Live data path
 
@@ -43,9 +40,11 @@ ESP32-S3 with PSRAM can download ~130KB and filter locally if:
 Maintainer refresh: `python3 scripts/generate_ttc_route_catalog.py --refresh`
 (also `.github/workflows/ttc-catalog.yml`).
 
-## Historical feasibility notes
+## Provenance
 
-Earlier investigation compared Hong Kong stop-scoped JSON clients with TTC
-GTFS-RT. That comparison motivated the TTC-only cut-over on this branch. The
-implementation above is the landed design; do not reintroduce Hong Kong
-operator clients into this product line.
+The dashboard shell and device lifecycle come from upstream
+[TransitInk OS](https://github.com/Zerie55699/transitink-os). Earlier design
+notes compared Hong Kong stop-scoped JSON clients with TTC GTFS-RT; that
+comparison motivated the TTC-only cut-over in this edition. Do not reintroduce
+Hong Kong operator clients unless the product scope is intentionally widened
+and documented.
