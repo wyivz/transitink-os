@@ -1,18 +1,17 @@
-# TransitInk OS (TTC edition)
+# TransitInk OS (TTC Edition)
 
-TransitInk OS is an ESP32-S3 firmware for a **400×300 e-paper arrival dashboard**.
-This repository is a **Toronto TTC-only edition**: it shows live bus and
-streetcar arrival countdowns on up to four widget slots, with an on-device
-**English** settings portal.
+[![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial-blue.svg)](LICENSE)
+[![Platform: ESP32-S3](https://img.shields.io/badge/Platform-ESP32--S3-green.svg)](https://www.espressif.com/)
 
-It runs on the same **Zectrix Note 4** hardware profile as the original
-project.
+TransitInk OS （TTC Edition) is an ESP32-S3 firmware designed for a **400×300 e-paper arrival dashboard**. 
+
+This repository is a **Toronto TTC-only edition**: it fetches and displays live bus and streetcar arrival countdowns across four customizable widget slots, featuring a localized, on-device English settings portal.
+
 
 ## Relationship to the original project
 
-This firmware is based on the original open-source
-[TransitInk OS](https://github.com/Zerie55699/transitink-os) by
-[@Zerie55699](https://github.com/Zerie55699).
+This firmware is a **Toronto**-focused derivative of the excellent original **[TransitInk OS](https://github.com/Zerie55699/transitink-os) (Hong Kong)** 
+created by **[@Zerie55699](https://github.com/Zerie55699)**. Huge thanks to the original author for making this project open-source!
 
 | | Original project | This edition |
 | --- | --- | --- |
@@ -24,7 +23,8 @@ This firmware is based on the original open-source
 
 Credit and thanks belong to the original author for the hardware integration,
 e-ink dashboard shell, configuration portal security model, sleep/wake
-behaviour, installer tooling, and overall product architecture. This fork
+behaviour, installer tooling, and overall product architecture. **This project
+would not exist without their elegant foundation and groundwork.** This fork
 replaces the Hong Kong transit stack with a TTC-only data path while keeping
 that shell.
 
@@ -56,12 +56,12 @@ KMB, Citybus, Green Minibus, MTR, Light Rail, or journey-time widgets, use the
 
 ## Demo hardware
 
-![Zectrix Note 4 running TransitInk OS](installer/assets/zectrix-note4-product.png)
+>[!Note]
+><mark>Image shown here is from the [upstream project](https://github.com/Zerie55699/transitink-os). A photo of this **Toronto TTC edition** will replace it in a future update.</mark>
+>
+>![Zectrix Note 4 running TransitInk OS](installer/assets/zectrix-note4-product.png)
 
-TransitInk OS is an independent source-available project and is not affiliated
-with or endorsed by Zectrix, the Toronto Transit Commission, or the City of
-Toronto. Zectrix, TTC, and related names remain the property of their
-respective owners.
+---
 
 ## End-user quick start
 
@@ -204,6 +204,7 @@ Do not assume that site serves this TTC edition unless you intentionally publish
 there.
 
 ## Licence and data terms
+Required Notice: Copyright 2026 TransitInk OS contributors.
 
 Original TransitInk OS source code is licensed for noncommercial purposes under
 the [PolyForm Noncommercial License 1.0.0](LICENSE). Commercial use requires a
