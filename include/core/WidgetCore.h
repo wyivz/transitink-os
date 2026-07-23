@@ -81,6 +81,11 @@ struct JourneyTimeRecord {
     int16_t statusCode = 0;
 };
 
+struct TtcEtaRecord {
+    std::string routeId;
+    int64_t eventEpoch = 0;
+};
+
 uint32_t refreshIntervalMs(WidgetType type);
 uint32_t staleWindowSeconds(WidgetType type);
 bool deadlineReached(uint32_t nowMs, uint32_t deadlineMs);
@@ -104,5 +109,9 @@ ProviderResult normalizeJourneyTimeSnapshot(uint8_t slot,
                                             const WidgetConfig& config,
                                             const JourneyTimeRecord& record,
                                             int64_t nowEpoch);
+ProviderResult normalizeTtcSnapshot(uint8_t slot,
+                                    const WidgetConfig& config,
+                                    const std::vector<TtcEtaRecord>& records,
+                                    int64_t nowEpoch);
 
 }  // namespace transitink

@@ -18,6 +18,7 @@ Supported widgets:
 - Green Minibus ETA for Hong Kong Island, Kowloon, and the New Territories
 - MTR ETA for heavy rail and Light Rail
 - Transport Department journey-time indicators
+- TTC surface ETA (bus/streetcar) via GTFS-Realtime Trip Updates
 
 Original TransitInk OS source code is licensed for noncommercial purposes under
 the [PolyForm Noncommercial License 1.0.0](LICENSE). Commercial use requires a

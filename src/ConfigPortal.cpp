@@ -9,6 +9,7 @@
 #include "TransitInkPortalPage.h"
 #include "core/PortalRequestAuth.h"
 #include "generated/TransitCatalogAssets.h"
+#include "generated/TransitTtcCatalogAssets.h"
 
 namespace {
 
@@ -153,6 +154,12 @@ void ConfigPortal::registerRoutes() {
                [this]() { if (authorizePortalRequest(false)) serveEmbeddedCatalog("stops-gmb.json"); });
     server_.on("/assets/catalog/current/rail.json", HTTP_GET,
                [this]() { if (authorizePortalRequest(false)) serveEmbeddedCatalog("rail.json"); });
+    server_.on("/assets/catalog/current/ttc/index.json", HTTP_GET,
+               [this]() { if (authorizePortalRequest(false)) serveEmbeddedCatalog("ttc/index.json"); });
+    server_.on("/assets/catalog/current/ttc/stops-ttc.json", HTTP_GET,
+               [this]() {
+                   if (authorizePortalRequest(false)) serveEmbeddedCatalog("ttc/stops-ttc.json");
+               });
     server_.on("/api/catalog/route-index", HTTP_GET,
                [this]() { if (authorizePortalRequest(false)) readUpdatedRouteIndex(); });
     server_.on("/api/catalog/update", HTTP_POST,
@@ -233,18 +240,29 @@ void ConfigPortal::sendIndex() {
 }
 
 void ConfigPortal::serveEmbeddedCatalog(const char* assetPath) {
-    for (std::size_t index = 0; index < transitink::kEmbeddedCatalogAssetCount; ++index) {
-        const auto& asset = transitink::kEmbeddedCatalogAssets[index];
-        if (strcmp(asset.path, assetPath) != 0) {
-            continue;
+    auto trySend = [this, assetPath](const transitink::EmbeddedCatalogAsset* assets,
+                                    std::size_t count) -> bool {
+        for (std::size_t index = 0; index < count; ++index) {
+            const auto& asset = assets[index];
+            if (strcmp(asset.path, assetPath) != 0) {
+                continue;
+            }
+            server_.sendHeader("Cache-Control",
+                               (strcmp(assetPath, "index.json") == 0 ||
+                                strcmp(assetPath, "ttc/index.json") == 0)
+                                   ? "no-cache"
+                                   : "public, max-age=31536000, immutable");
+            server_.sendHeader("Content-Encoding", "gzip");
+            server_.send_P(200, "application/json; charset=utf-8",
+                           reinterpret_cast<PGM_P>(asset.data), asset.size);
+            return true;
         }
-        server_.sendHeader("Cache-Control",
-                           strcmp(assetPath, "index.json") == 0
-                               ? "no-cache"
-                               : "public, max-age=31536000, immutable");
-        server_.sendHeader("Content-Encoding", "gzip");
-        server_.send_P(200, "application/json; charset=utf-8",
-                       reinterpret_cast<PGM_P>(asset.data), asset.size);
+        return false;
+    };
+
+    if (trySend(transitink::kEmbeddedCatalogAssets, transitink::kEmbeddedCatalogAssetCount) ||
+        trySend(transitink::kEmbeddedTtcCatalogAssets,
+                transitink::kEmbeddedTtcCatalogAssetCount)) {
         return;
     }
     sendText(404, "text/plain; charset=utf-8", "找不到內建交通目錄資源");

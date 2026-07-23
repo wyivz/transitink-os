@@ -173,6 +173,11 @@ WidgetSnapshot configuredWidgetSnapshot(uint8_t slot, const WidgetConfig& config
             snapshot.title = config.journeyTime.locationLabelTc;
             snapshot.subtitle = config.journeyTime.destinationLabelTc;
             break;
+        case WidgetType::TtcEta:
+            snapshot.title = joinNonEmpty(
+                {config.ttc.routeLabel, config.ttc.destinationLabel});
+            snapshot.subtitle = config.ttc.stopLabel;
+            break;
         case WidgetType::Disabled:
             break;
     }
@@ -193,6 +198,8 @@ uint32_t refreshIntervalMs(WidgetType type) {
             return 30000;
         case WidgetType::JourneyTime:
             return 120000;
+        case WidgetType::TtcEta:
+            return 60000;
         case WidgetType::Disabled:
             return 0;
     }
@@ -209,6 +216,8 @@ uint32_t staleWindowSeconds(WidgetType type) {
             return 90;
         case WidgetType::JourneyTime:
             return 360;
+        case WidgetType::TtcEta:
+            return 180;
         case WidgetType::Disabled:
             return 0;
     }
@@ -375,6 +384,35 @@ ProviderResult normalizeJourneyTimeSnapshot(uint8_t slot,
     }
     snapshot.values[0] = {std::move(valueText), journeyContext(record.colourId), 0};
     snapshot.valueCount = 1;
+    snapshot.state = WidgetState::Ready;
+    return {ProviderOutcome::Success, std::move(snapshot)};
+}
+
+ProviderResult normalizeTtcSnapshot(uint8_t slot,
+                                    const WidgetConfig& config,
+                                    const std::vector<TtcEtaRecord>& records,
+                                    int64_t nowEpoch) {
+    if (config.type != WidgetType::TtcEta || !isWidgetConfigValid(config)) {
+        return errorResult(slot, config, nowEpoch, ProviderOutcome::InvalidConfig,
+                           kInvalidConfigMessage);
+    }
+    if (nowEpoch <= 0) {
+        return errorResult(slot, config, nowEpoch, ProviderOutcome::ClockUnsynced,
+                           kClockUnsyncedMessage);
+    }
+
+    auto snapshot = baseSnapshot(slot, config, nowEpoch, nowEpoch);
+    std::vector<WidgetValue> values;
+    values.reserve(records.size());
+    for (const auto& record : records) {
+        if (record.eventEpoch <= nowEpoch) continue;
+        if (!record.routeId.empty() && record.routeId != config.ttc.routeId) continue;
+        appendUnique(values,
+                     {countdownText(record.eventEpoch, nowEpoch), config.ttc.destinationLabel,
+                      record.eventEpoch});
+    }
+    storeFirstTwo(snapshot, values);
+    if (snapshot.valueCount == 0) return emptyResult(std::move(snapshot));
     snapshot.state = WidgetState::Ready;
     return {ProviderOutcome::Success, std::move(snapshot)};
 }

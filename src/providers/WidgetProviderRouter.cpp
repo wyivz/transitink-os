@@ -5,6 +5,7 @@
 #include "providers/JourneyTimeProvider.h"
 #include "providers/LightRailProvider.h"
 #include "providers/MtrProvider.h"
+#include "providers/TtcProvider.h"
 
 namespace {
 
@@ -34,8 +35,14 @@ WidgetProviderRouter::WidgetProviderRouter(BusProvider& bus,
                                            GmbProvider& gmb,
                                            MtrProvider& mtr,
                                            LightRailProvider& lightRail,
-                                           JourneyTimeProvider& journey)
-    : bus_(bus), gmb_(gmb), mtr_(mtr), lightRail_(lightRail), journey_(journey) {}
+                                           JourneyTimeProvider& journey,
+                                           TtcProvider& ttc)
+    : bus_(bus),
+      gmb_(gmb),
+      mtr_(mtr),
+      lightRail_(lightRail),
+      journey_(journey),
+      ttc_(ttc) {}
 
 transitink::ProviderResult WidgetProviderRouter::fetch(
     uint8_t slot, const transitink::WidgetConfig& config, int64_t nowEpoch) {
@@ -60,6 +67,8 @@ transitink::ProviderResult WidgetProviderRouter::fetch(
             break;
         case transitink::WidgetType::JourneyTime:
             return journey_.fetch(slot, config, nowEpoch);
+        case transitink::WidgetType::TtcEta:
+            return ttc_.fetch(slot, config, nowEpoch);
     }
     return invalidResult(slot, config, nowEpoch);
 }

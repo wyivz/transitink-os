@@ -34,6 +34,8 @@ const char* widgetTypeId(WidgetType value) {
             return "mtr_eta";
         case WidgetType::JourneyTime:
             return "journey_time";
+        case WidgetType::TtcEta:
+            return "ttc_eta";
     }
     return "";
 }
@@ -49,6 +51,8 @@ bool parseWidgetTypeId(const std::string& value, WidgetType& out) {
         out = WidgetType::MtrEta;
     } else if (value == "journey_time") {
         out = WidgetType::JourneyTime;
+    } else if (value == "ttc_eta") {
+        out = WidgetType::TtcEta;
     } else {
         return false;
     }
@@ -137,6 +141,13 @@ bool isWidgetConfigValid(const WidgetConfig& widget) {
                    isRequiredIdValid(widget.journeyTime.destinationId) &&
                    isLabelValid(widget.journeyTime.locationLabelTc) &&
                    isLabelValid(widget.journeyTime.destinationLabelTc);
+        case WidgetType::TtcEta:
+            return isRequiredIdValid(widget.ttc.routeId) &&
+                   isRequiredIdValid(widget.ttc.directionId) &&
+                   isRequiredIdValid(widget.ttc.stopId) &&
+                   isLabelValid(widget.ttc.routeLabel) &&
+                   isLabelValid(widget.ttc.stopLabel) &&
+                   isLabelValid(widget.ttc.destinationLabel);
     }
     return false;
 }

@@ -15,7 +15,7 @@ constexpr std::size_t kWidgetSlotCount = 4;
 constexpr std::size_t kMaxStableIdBytes = 64;
 constexpr std::size_t kMaxConfigLabelBytes = 96;
 
-enum class WidgetType : uint8_t { Disabled, BusEta, GmbEta, MtrEta, JourneyTime };
+enum class WidgetType : uint8_t { Disabled, BusEta, GmbEta, MtrEta, JourneyTime, TtcEta };
 enum class BusOperator : uint8_t { Kmb, LongWin, Citybus };
 enum class RailMode : uint8_t { HeavyRail, LightRail };
 
@@ -41,12 +41,18 @@ struct JourneyTimeWidgetConfig {
     std::string locationLabelTc, destinationLabelTc;
 };
 
+struct TtcWidgetConfig {
+    std::string routeId, directionId, stopId;
+    std::string routeLabel, stopLabel, destinationLabel;
+};
+
 struct WidgetConfig {
     WidgetType type = WidgetType::Disabled;
     BusWidgetConfig bus;
     GmbWidgetConfig gmb;
     MtrWidgetConfig mtr;
     JourneyTimeWidgetConfig journeyTime;
+    TtcWidgetConfig ttc;
 };
 
 using WidgetSlots = std::array<WidgetConfig, kWidgetSlotCount>;

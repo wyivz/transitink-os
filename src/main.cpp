@@ -27,11 +27,13 @@
 #include "core/WidgetScheduler.h"
 #include "hardware/BoardProfile.h"
 #include "hardware/BoardSupport.h"
+#include "TtcClient.h"
 #include "providers/BusProvider.h"
 #include "providers/GmbProvider.h"
 #include "providers/JourneyTimeProvider.h"
 #include "providers/LightRailProvider.h"
 #include "providers/MtrProvider.h"
+#include "providers/TtcProvider.h"
 #include "providers/WidgetProviderRouter.h"
 
 ConfigStore configStore;
@@ -43,13 +45,16 @@ GmbClient gmbClient;
 MtrClient mtrClient;
 LightRailClient lightRailClient;
 JourneyTimeClient journeyTimeClient;
+TtcClient ttcClient;
 BusProvider busProvider(kmbClient, citybusClient);
 GmbProvider gmbProvider(gmbClient);
 MtrProvider mtrProvider(mtrClient);
 LightRailProvider lightRailProvider(lightRailClient);
 JourneyTimeProvider journeyTimeProvider(journeyTimeClient);
+TtcProvider ttcProvider(ttcClient);
 WidgetProviderRouter widgetProviderRouter(
-    busProvider, gmbProvider, mtrProvider, lightRailProvider, journeyTimeProvider);
+    busProvider, gmbProvider, mtrProvider, lightRailProvider, journeyTimeProvider,
+    ttcProvider);
 transitink::WidgetScheduler widgetScheduler(widgetProviderRouter);
 WidgetCatalogService widgetCatalogService(kmbClient, citybusClient, gmbClient);
 WeatherClient weatherClient;

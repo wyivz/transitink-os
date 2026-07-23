@@ -5,6 +5,7 @@
 #include "providers/JourneyTimeProvider.h"
 #include "providers/LightRailProvider.h"
 #include "providers/MtrProvider.h"
+#include "providers/TtcProvider.h"
 
 #include <array>
 #include <cassert>
@@ -22,7 +23,7 @@ using transitink::WidgetSnapshot;
 using transitink::WidgetState;
 using transitink::WidgetType;
 
-enum class ProviderKind { Bus, Gmb, Mtr, LightRail, JourneyTime };
+enum class ProviderKind { Bus, Gmb, Mtr, LightRail, JourneyTime, Ttc };
 
 struct ProviderCall {
     ProviderKind kind;
@@ -81,6 +82,18 @@ WidgetConfig journeyConfig() {
     config.type = WidgetType::JourneyTime;
     config.journeyTime.locationId = "H1";
     config.journeyTime.destinationId = "K1";
+    return config;
+}
+
+WidgetConfig ttcConfig() {
+    WidgetConfig config;
+    config.type = WidgetType::TtcEta;
+    config.ttc.routeId = "506";
+    config.ttc.directionId = "0";
+    config.ttc.stopId = "8431";
+    config.ttc.routeLabel = "506";
+    config.ttc.stopLabel = "Test Stop";
+    config.ttc.destinationLabel = "Eastbound";
     return config;
 }
 
@@ -147,6 +160,14 @@ ProviderResult JourneyTimeProvider::fetch(uint8_t slot, const WidgetConfig& conf
     return markerResult(ProviderKind::JourneyTime, slot, config.type, nowEpoch);
 }
 
+TtcProvider::TtcProvider(TtcClient& client) : client_(client) {}
+
+ProviderResult TtcProvider::fetch(uint8_t slot, const WidgetConfig& config, int64_t nowEpoch) {
+    (void)client_;
+    calls.push_back({ProviderKind::Ttc, slot, &config, nowEpoch});
+    return markerResult(ProviderKind::Ttc, slot, config.type, nowEpoch);
+}
+
 int main() {
     KmbClient kmb;
     CitybusClient citybus;
@@ -154,12 +175,14 @@ int main() {
     MtrClient mtrClient;
     LightRailClient lightRailClient;
     JourneyTimeClient journeyClient;
+    TtcClient ttcClient;
     BusProvider bus(kmb, citybus);
     GmbProvider gmb(gmbClient);
     MtrProvider mtr(mtrClient);
     LightRailProvider lightRail(lightRailClient);
     JourneyTimeProvider journey(journeyClient);
-    WidgetProviderRouter router(bus, gmb, mtr, lightRail, journey);
+    TtcProvider ttc(ttcClient);
+    WidgetProviderRouter router(bus, gmb, mtr, lightRail, journey, ttc);
 
     {
         const WidgetConfig config = busConfig();
@@ -195,6 +218,13 @@ int main() {
         assert(result.snapshot.title == "4");
         assert(calls.size() == 5);
         assertForwarded(calls.back(), ProviderKind::JourneyTime, 0, config, 1700000005);
+    }
+    {
+        const WidgetConfig config = ttcConfig();
+        const auto result = router.fetch(1, config, 1700000006);
+        assert(result.snapshot.title == "5");
+        assert(calls.size() == 6);
+        assertForwarded(calls.back(), ProviderKind::Ttc, 1, config, 1700000006);
     }
 
     {
@@ -242,13 +272,12 @@ int main() {
         configs[0] = busConfig();
         configs[1] = gmbConfig();
         configs[2] = railConfig(RailMode::HeavyRail);
-        configs[3] = journeyConfig();
+        configs[3] = ttcConfig();
         transitink::WidgetScheduler scheduler(router);
         scheduler.configure(configs, 500);
 
         const std::array<ProviderKind, 4> expectedKinds = {
-            ProviderKind::Bus, ProviderKind::Gmb, ProviderKind::Mtr,
-            ProviderKind::JourneyTime};
+            ProviderKind::Bus, ProviderKind::Gmb, ProviderKind::Mtr, ProviderKind::Ttc};
         for (uint8_t slot = 0; slot < 4; ++slot) {
             const std::size_t before = calls.size();
             const auto tick = scheduler.serviceNextDue(500, 1700000100 + slot);

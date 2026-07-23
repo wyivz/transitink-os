@@ -5,6 +5,8 @@
 [TTC GTFS-RT](https://open.toronto.ca/dataset/ttc-gtfs-realtime-gtfs-rt/)
 的可行性。评估基于仓库现状与 2026-07-23 对公开端点的实测。
 
+> **Implementation status (2026-07-23):** shipped on this branch as `WidgetType::TtcEta` — GitHub Actions refreshes `data/catalog/ttc/`, device downloads `bustime.ttc.ca/gtfsrt/trips` and filters by `stop_id`.
+
 ## 0. 白话：要在这块硬件上做「和现在一样的到站屏」，该怎么做
 
 ### 你现在香港版在干什么（一句话）
@@ -138,9 +140,9 @@ GitHub Actions（你推送或每周）
 | 当前是否已有 GTFS / GTFS-RT？ | **没有**。实时层是香港运营商 REST JSON/XML 适配器。 |
 | 能否“改用通用 GTFS-RT”直接替换现有香港栈？ | **不适合整仓替换**。显示契约可复用，但配置、目录、TLS、客户端语义都是香港专用。 |
 | 能否以附加 Provider 适配 TTC？ | **技术上可行，成本高**。核心产品语义（站点到站倒计时）可用 TripUpdates 推导，但嵌入式约束显著。 |
-| 推荐策略 | **同等功能优先走「GTFS-RT → 站点 JSON 代理 + 新 TtcClient」**；若坚持纯机上，再做共享缓存的 TripUpdate Provider。保留香港栈。 |
+| 推荐策略 | **无代理：GitHub（或固件内）托管精简站牌目录 + 设备直连 TripUpdates 并按 stop 过滤。** 若可接受小服务，站点 JSON 代理仍是固件改动最小的路径。保留香港栈。 |
 
-**可行性等级：有条件可行（additive adapter），非整仓泛化。同等产品体验最稳妥的落地是站点级代理。**
+**可行性等级：有条件可行（additive adapter），非整仓泛化。无代理时用「GitHub 静态目录 + 设备 GTFS-RT」即可实现同等到站功能。**
 
 ---
 
@@ -352,20 +354,18 @@ Open Toronto 上部分数据集页面呈现 Retired，但 BusTime 端点仍在�
 
 ## 5. 若实施的建议路径
 
-优先做「同等到站功能」时，按这条顺序：
+优先做「同等到站功能」时：
 
-### 路径 1（推荐）— 站点 JSON 代理 + 固件薄客户端
+### 路径 1（无常驻代理 · 推荐给你当前约束）— GitHub 目录 + 设备直连 GTFS-RT
 
-1. 写一个 Worker/小服务：定时拉 `bustime.ttc.ca/gtfsrt/trips`，按 `stop_id`/`route_id` 过滤，输出香港式小 JSON。  
-2. 固件新增 `TtcClient` + `WidgetType`（或 `BusOperator::Ttc`），复用 `normalizeBusSnapshot` / 同类倒计时逻辑。  
-3. 门户选站：先可手工填 `stop_id`；再补 Surface GTFS 缩减目录。  
-4. TLS：设备需能连你的代理域名（若代理用常见 CA，比直连 TTC 更简单）。
+1. Actions/脚本从 Surface GTFS 生成精简 `stops`/`routes` 包，进 Release 或 `data/catalog/`（与现有香港目录同模式）。  
+2. 固件：nanopb 流式解码 `bustime.ttc.ca/gtfsrt/trips`；**每刷新周期只拉一次**，按最多 4 个已配置 `stop_id` 过滤。  
+3. 门户按需加载站牌包；TLS 增加 GlobalSign（或按区域切换 trust）。  
+4. 不把实时 ETA 写进 GitHub。
 
-### 路径 2 — 设备直连 GTFS-RT
+### 路径 2 — 站点 JSON 代理 + 固件薄客户端
 
-1. 主机侧先验证按站过滤（已用公开 feed 验证可行）。  
-2. 固件：nanopb 流式解码 + 四槽共享 feed 缓存。  
-3. 同样需要缩减静态目录与 GlobalSign 信任。
+适合想少改固件、愿意养 Worker/小服务时：代理过滤，设备只拿百字节 JSON。
 
 ### 明确不做（首版）
 
@@ -374,6 +374,8 @@ Open Toronto 上部分数据集页面呈现 Retired，但 BusTime 端点仍在�
 - 地铁完整 ETA  
 - 用 GTFS-RT 替换香港运营商客户端  
 - 依赖未公开的 `ttc.ca` 网页 JSON 或需申请的 Clever predictions key  
+- 用 GitHub Actions/Pages 托管实时 ETA  
+- 设备下载完整 ~80MB SurfaceGTFS.zip  
 
 ---
 

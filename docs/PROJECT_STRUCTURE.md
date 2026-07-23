@@ -68,9 +68,9 @@ The top level of `src/` contains the Arduino-facing implementation:
 - `ConfigStore`, `AppConfig`, `ConfigPortal`, `PortalConfigCodec`, and
   `TransitInkPortalPage` own persistent settings and the local web portal.
 - `KmbClient`, `CitybusClient`, `GmbClient`, `MtrClient`, `LightRailClient`,
-  `JourneyTimeClient`, and `WeatherClient` perform remote data access.
-- `ConfigPortal` streams versioned gzip bus, Green Minibus, MTR, and Light Rail
-  assets directly from generated PROGMEM arrays without decompressing them in
+  `JourneyTimeClient`, `TtcClient`, and `WeatherClient` perform remote data access.
+- `ConfigPortal` streams versioned gzip bus, Green Minibus, MTR, Light Rail,
+  and TTC assets directly from generated PROGMEM arrays without decompressing them in
   ESP32 RAM. `WidgetCatalogService` owns compact journey-time projections and
   the refreshed route index and per-route LittleFS stop overrides.
 

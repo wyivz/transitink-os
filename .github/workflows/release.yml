@@ -37,6 +37,7 @@ jobs:
         run: |
           .venv/bin/python scripts/generate_hk_glyph_font.py --check
           .venv/bin/python scripts/generate_transit_route_catalog.py --check
+          .venv/bin/python scripts/generate_ttc_route_catalog.py --check
 
       - name: Run tests
         run: python3 -m unittest discover -s tests -p "test_*.py" -q

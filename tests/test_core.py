@@ -5,11 +5,13 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+COMPILER = "g++"
 BUILD_DIR = ROOT / ".test-build"
 TEST_BIN = BUILD_DIR / "test_core"
 BOARD_PROFILE_TEST_BIN = BUILD_DIR / "test_board_profile"
 WIDGET_CONFIG_TEST_BIN = BUILD_DIR / "test_widget_config_core"
 WIDGET_CORE_TEST_BIN = BUILD_DIR / "test_widget_core"
+GTFS_RT_FILTER_TEST_BIN = BUILD_DIR / "test_gtfs_realtime_trip_filter"
 DISPLAY_TEXT_CORE_TEST_BIN = BUILD_DIR / "test_display_text_core"
 WIDGET_SCHEDULER_TEST_BIN = BUILD_DIR / "test_widget_scheduler"
 WIDGET_PROVIDER_ROUTER_TEST_BIN = BUILD_DIR / "test_widget_provider_router"
@@ -28,7 +30,7 @@ class CoreBehaviorTests(unittest.TestCase):
     def test_selected_board_profile_cpp_contract(self):
         BUILD_DIR.mkdir(exist_ok=True)
         cmd = [
-            "c++",
+            COMPILER,
             "-std=c++17",
             "-Wall",
             "-Wextra",
@@ -76,7 +78,7 @@ class CoreBehaviorTests(unittest.TestCase):
     def test_core_cpp_behaviors(self):
         BUILD_DIR.mkdir(exist_ok=True)
         cmd = [
-            "c++",
+            COMPILER,
             "-std=c++17",
             "-Wall",
             "-Wextra",
@@ -94,7 +96,7 @@ class CoreBehaviorTests(unittest.TestCase):
     def test_widget_config_cpp_behaviors(self):
         BUILD_DIR.mkdir(exist_ok=True)
         cmd = [
-            "c++",
+            COMPILER,
             "-std=c++17",
             "-Wall",
             "-Wextra",
@@ -112,7 +114,7 @@ class CoreBehaviorTests(unittest.TestCase):
     def test_widget_core_cpp_behaviors(self):
         BUILD_DIR.mkdir(exist_ok=True)
         cmd = [
-            "c++",
+            COMPILER,
             "-std=c++17",
             "-Wall",
             "-Wextra",
@@ -128,10 +130,27 @@ class CoreBehaviorTests(unittest.TestCase):
         subprocess.run(cmd, cwd=ROOT, check=True)
         subprocess.run([str(WIDGET_CORE_TEST_BIN)], cwd=ROOT, check=True)
 
+    def test_gtfs_realtime_trip_filter_cpp_behaviors(self):
+        BUILD_DIR.mkdir(exist_ok=True)
+        cmd = [
+            COMPILER,
+            "-std=c++17",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-Iinclude",
+            "src/core/GtfsRealtimeTripFilter.cpp",
+            "test_host/test_gtfs_realtime_trip_filter.cpp",
+            "-o",
+            str(GTFS_RT_FILTER_TEST_BIN),
+        ]
+        subprocess.run(cmd, cwd=ROOT, check=True)
+        subprocess.run([str(GTFS_RT_FILTER_TEST_BIN)], cwd=ROOT, check=True)
+
     def test_display_text_core_cpp_behaviors(self):
         BUILD_DIR.mkdir(exist_ok=True)
         cmd = [
-            "c++",
+            COMPILER,
             "-std=c++17",
             "-Wall",
             "-Wextra",
@@ -148,7 +167,7 @@ class CoreBehaviorTests(unittest.TestCase):
     def test_widget_scheduler_cpp_behaviors(self):
         BUILD_DIR.mkdir(exist_ok=True)
         cmd = [
-            "c++",
+            COMPILER,
             "-std=c++17",
             "-Wall",
             "-Wextra",
@@ -168,7 +187,7 @@ class CoreBehaviorTests(unittest.TestCase):
     def test_widget_provider_router_cpp_behaviors(self):
         BUILD_DIR.mkdir(exist_ok=True)
         cmd = [
-            "c++",
+            COMPILER,
             "-std=c++17",
             "-Wall",
             "-Wextra",
@@ -191,7 +210,7 @@ class CoreBehaviorTests(unittest.TestCase):
     def test_transit_catalog_cpp_behaviors(self):
         BUILD_DIR.mkdir(exist_ok=True)
         cmd = [
-            "c++",
+            COMPILER,
             "-std=c++17",
             "-Wall",
             "-Wextra",
@@ -209,7 +228,7 @@ class CoreBehaviorTests(unittest.TestCase):
     def test_gmb_provider_cpp_behaviors(self):
         BUILD_DIR.mkdir(exist_ok=True)
         cmd = [
-            "c++",
+            COMPILER,
             "-std=c++17",
             "-Wall",
             "-Wextra",
@@ -230,7 +249,7 @@ class CoreBehaviorTests(unittest.TestCase):
     def test_rail_provider_invalid_config_precedence(self):
         BUILD_DIR.mkdir(exist_ok=True)
         cmd = [
-            "c++",
+            COMPILER,
             "-std=c++17",
             "-Wall",
             "-Wextra",
@@ -270,7 +289,7 @@ class CoreBehaviorTests(unittest.TestCase):
             check=True,
         )
         cmd = [
-            "c++",
+            COMPILER,
             "-std=c++17",
             "-Wall",
             "-Wextra",
@@ -292,7 +311,7 @@ class CoreBehaviorTests(unittest.TestCase):
     def test_journey_time_provider_cpp_behaviors(self):
         BUILD_DIR.mkdir(exist_ok=True)
         cmd = [
-            "c++",
+            COMPILER,
             "-std=c++17",
             "-Wall",
             "-Wextra",
@@ -331,7 +350,7 @@ class CoreBehaviorTests(unittest.TestCase):
             check=True,
         )
         cmd = [
-            "c++",
+            COMPILER,
             "-std=c++17",
             "-Wall",
             "-Wextra",

@@ -87,11 +87,13 @@ int main() {
     assert(refreshIntervalMs(WidgetType::GmbEta) == 60000);
     assert(refreshIntervalMs(WidgetType::MtrEta) == 30000);
     assert(refreshIntervalMs(WidgetType::JourneyTime) == 120000);
+    assert(refreshIntervalMs(WidgetType::TtcEta) == 60000);
     assert(staleWindowSeconds(WidgetType::Disabled) == 0);
     assert(staleWindowSeconds(WidgetType::BusEta) == 180);
     assert(staleWindowSeconds(WidgetType::GmbEta) == 180);
     assert(staleWindowSeconds(WidgetType::MtrEta) == 90);
     assert(staleWindowSeconds(WidgetType::JourneyTime) == 360);
+    assert(staleWindowSeconds(WidgetType::TtcEta) == 180);
 
     assert(deadlineReached(100, 100));
     assert(deadlineReached(101, 100));

@@ -13,6 +13,22 @@ relicense the terms that apply to these data sources.
   `stops-ctb.json.gz`, `stops-gmb.json.gz`, and `rail.json.gz`
 - Integrity metadata: `data/catalog/catalog-manifest.json`
 
+## TTC Surface catalog
+
+- Catalog path: `data/catalog/ttc/`
+- Generator: `scripts/generate_ttc_route_catalog.py`
+- Source: TTC Surface GTFS ZIP from Open Toronto / TTC open data
+  (`SurfaceGTFS.zip`)
+- Live ETA source: `https://bustime.ttc.ca/gtfsrt/trips` (GTFS-Realtime),
+  filtered on-device by configured `stop_id` / `route_id`
+- Licence: [Open Government Licence – Toronto](https://open.toronto.ca/open-data-licence/)
+- Maintainer refresh: `python3 scripts/generate_ttc_route_catalog.py --refresh`
+  (also scheduled via `.github/workflows/ttc-catalog.yml`)
+
+When redistributing a TTC catalog release, attribute the City of Toronto /
+Toronto Transit Commission under the Open Government Licence – Toronto. Do not
+imply endorsement of TransitInk OS.
+
 ## Sources and attribution
 
 | Data in catalog | Source and rights owner | Use in TransitInk OS |

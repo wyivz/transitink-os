@@ -56,9 +56,11 @@ class ConfigStructureTests(unittest.TestCase):
         self.assertIn('item.createNestedObject("mtr")', source)
         self.assertIn('mtr["mode"] = transitink::railModeId(widget.mtr.mode)', source)
         self.assertIn('item.createNestedObject("journey_time")', source)
+        self.assertIn('item.createNestedObject("ttc")', source)
         self.assertIn('item["bus"].as<JsonObjectConst>()', source)
         self.assertIn('item["mtr"].as<JsonObjectConst>()', source)
         self.assertIn('item["journey_time"].as<JsonObjectConst>()', source)
+        self.assertIn('item["ttc"].as<JsonObjectConst>()', source)
 
     def test_json_document_capacity_is_bounded(self):
         portal_codec = (ROOT / "src/PortalConfigCodec.cpp").read_text()

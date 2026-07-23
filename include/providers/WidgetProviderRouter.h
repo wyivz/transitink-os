@@ -9,6 +9,7 @@ class GmbProvider;
 class JourneyTimeProvider;
 class LightRailProvider;
 class MtrProvider;
+class TtcProvider;
 
 class WidgetProviderRouter final : public transitink::IWidgetProviderRouter {
 public:
@@ -16,7 +17,8 @@ public:
                          GmbProvider& gmb,
                          MtrProvider& mtr,
                          LightRailProvider& lightRail,
-                         JourneyTimeProvider& journey);
+                         JourneyTimeProvider& journey,
+                         TtcProvider& ttc);
 
     transitink::ProviderResult fetch(uint8_t slot,
                                      const transitink::WidgetConfig& config,
@@ -28,4 +30,5 @@ private:
     MtrProvider& mtr_;
     LightRailProvider& lightRail_;
     JourneyTimeProvider& journey_;
+    TtcProvider& ttc_;
 };

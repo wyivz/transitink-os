@@ -29,11 +29,14 @@ int main() {
     assert(std::string(transitink::widgetTypeId(transitink::WidgetType::GmbEta)) == "gmb_eta");
     assert(std::string(transitink::widgetTypeId(transitink::WidgetType::MtrEta)) == "mtr_eta");
     assert(std::string(transitink::widgetTypeId(transitink::WidgetType::JourneyTime)) == "journey_time");
+    assert(std::string(transitink::widgetTypeId(transitink::WidgetType::TtcEta)) == "ttc_eta");
     assert(transitink::parseWidgetTypeId("mtr_eta", widgetType));
     assert(widgetType == transitink::WidgetType::MtrEta);
     assert(!transitink::parseWidgetTypeId("unknown", widgetType));
     assert(transitink::parseWidgetTypeId("gmb_eta", widgetType));
     assert(widgetType == transitink::WidgetType::GmbEta);
+    assert(transitink::parseWidgetTypeId("ttc_eta", widgetType));
+    assert(widgetType == transitink::WidgetType::TtcEta);
 
     transitink::BusOperator busOperator;
     assert(std::string(transitink::busOperatorId(transitink::BusOperator::Kmb)) == "kmb");
@@ -82,6 +85,16 @@ int main() {
     journeyWidget.journeyTime.locationId = "HOME";
     journeyWidget.journeyTime.destinationId = "WORK";
     assert(transitink::isWidgetConfigValid(journeyWidget));
+
+    transitink::WidgetConfig ttcWidget;
+    ttcWidget.type = transitink::WidgetType::TtcEta;
+    ttcWidget.ttc.routeId = "506";
+    ttcWidget.ttc.directionId = "0";
+    ttcWidget.ttc.stopId = "8431";
+    assert(transitink::isWidgetConfigValid(ttcWidget));
+    ttcWidget.ttc.stopId.clear();
+    assert(!transitink::isWidgetConfigValid(ttcWidget));
+
     assert(transitink::isWidgetConfigValid(transitink::WidgetConfig{}));
 
     return 0;

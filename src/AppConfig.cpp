@@ -152,6 +152,19 @@ bool parseWidget(JsonObjectConst item, transitink::WidgetConfig& widget) {
             widget.journeyTime.destinationLabelTc = asStdString(journeyTime["destination_label_tc"]);
             break;
         }
+        case transitink::WidgetType::TtcEta: {
+            JsonObjectConst ttc = item["ttc"].as<JsonObjectConst>();
+            if (ttc.isNull()) {
+                return false;
+            }
+            widget.ttc.routeId = asStdString(ttc["route_id"]);
+            widget.ttc.directionId = asStdString(ttc["direction_id"]);
+            widget.ttc.stopId = asStdString(ttc["stop_id"]);
+            widget.ttc.routeLabel = asStdString(ttc["route_label"]);
+            widget.ttc.stopLabel = asStdString(ttc["stop_label"]);
+            widget.ttc.destinationLabel = asStdString(ttc["destination_label"]);
+            break;
+        }
     }
 
     return transitink::isWidgetConfigValid(widget);
@@ -204,6 +217,16 @@ void writeWidget(JsonObject item, const transitink::WidgetConfig& widget) {
             journeyTime["destination_id"] = widget.journeyTime.destinationId.c_str();
             journeyTime["location_label_tc"] = widget.journeyTime.locationLabelTc.c_str();
             journeyTime["destination_label_tc"] = widget.journeyTime.destinationLabelTc.c_str();
+            break;
+        }
+        case transitink::WidgetType::TtcEta: {
+            JsonObject ttc = item.createNestedObject("ttc");
+            ttc["route_id"] = widget.ttc.routeId.c_str();
+            ttc["direction_id"] = widget.ttc.directionId.c_str();
+            ttc["stop_id"] = widget.ttc.stopId.c_str();
+            ttc["route_label"] = widget.ttc.routeLabel.c_str();
+            ttc["stop_label"] = widget.ttc.stopLabel.c_str();
+            ttc["destination_label"] = widget.ttc.destinationLabel.c_str();
             break;
         }
     }

@@ -694,6 +694,7 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn("bus_eta", page)
         self.assertIn("mtr_eta", page)
         self.assertIn("journey_time", page)
+        self.assertIn("ttc_eta", page)
 
     def test_portal_is_password_safe_and_has_one_save_action(self):
         page = read_text("src/TransitInkPortalPage.cpp")
