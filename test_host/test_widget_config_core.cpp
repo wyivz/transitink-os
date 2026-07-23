@@ -2,100 +2,65 @@
 
 #include <cassert>
 #include <string>
-#include <vector>
+
+namespace {
+
+transitink::WidgetConfig validTtcWidget() {
+    transitink::WidgetConfig widget;
+    widget.type = transitink::WidgetType::TtcEta;
+    widget.ttc.routeId = "506";
+    widget.ttc.directionId = "0";
+    widget.ttc.stopId = "8431";
+    widget.ttc.routeLabel = "506";
+    widget.ttc.stopLabel = "College St at University Ave";
+    widget.ttc.destinationLabel = "Eastbound";
+    return widget;
+}
+
+}  // namespace
 
 int main() {
+    static_assert(transitink::kConfigSchemaVersion == 3);
+
     transitink::WidgetSlots slots{};
     static_assert(slots.size() == 4);
-    for (const auto& slot : slots) assert(slot.type == transitink::WidgetType::Disabled);
+    for (const auto& slot : slots) {
+        assert(slot.type == transitink::WidgetType::Disabled);
+        assert(transitink::isWidgetConfigValid(slot));
+    }
 
-    slots[0].type = transitink::WidgetType::BusEta;
-    slots[1].type = transitink::WidgetType::BusEta;
-    assert(transitink::isWidgetConfigValid(slots[0]) == false);
+    assert(std::string(transitink::widgetTypeId(transitink::WidgetType::Disabled)) ==
+           "disabled");
+    assert(std::string(transitink::widgetTypeId(transitink::WidgetType::TtcEta)) ==
+           "ttc_eta");
+    assert(std::string(transitink::widgetTypeId(static_cast<transitink::WidgetType>(255))) ==
+           "");
 
-    std::vector<bus_eta::RouteSelection> legacy = {
-        {"268B", "O", "1", "STOP-A", "紅磡碼頭"},
-        {"968", "I", "1", "STOP-B", "元朗西"},
-    };
-    const auto migrated = transitink::migrateLegacyRoutes(legacy, "元朗廣場");
-    assert(migrated[0].type == transitink::WidgetType::BusEta);
-    assert(migrated[0].bus.operatorId == transitink::BusOperator::Kmb);
-    assert(migrated[0].bus.routeId == "268B");
-    assert(migrated[2].type == transitink::WidgetType::Disabled);
-
-    transitink::WidgetType widgetType;
-    assert(std::string(transitink::widgetTypeId(transitink::WidgetType::Disabled)) == "disabled");
-    assert(std::string(transitink::widgetTypeId(transitink::WidgetType::BusEta)) == "bus_eta");
-    assert(std::string(transitink::widgetTypeId(transitink::WidgetType::GmbEta)) == "gmb_eta");
-    assert(std::string(transitink::widgetTypeId(transitink::WidgetType::MtrEta)) == "mtr_eta");
-    assert(std::string(transitink::widgetTypeId(transitink::WidgetType::JourneyTime)) == "journey_time");
-    assert(std::string(transitink::widgetTypeId(transitink::WidgetType::TtcEta)) == "ttc_eta");
-    assert(transitink::parseWidgetTypeId("mtr_eta", widgetType));
-    assert(widgetType == transitink::WidgetType::MtrEta);
-    assert(!transitink::parseWidgetTypeId("unknown", widgetType));
-    assert(transitink::parseWidgetTypeId("gmb_eta", widgetType));
-    assert(widgetType == transitink::WidgetType::GmbEta);
+    transitink::WidgetType widgetType = transitink::WidgetType::Disabled;
+    assert(transitink::parseWidgetTypeId("disabled", widgetType));
+    assert(widgetType == transitink::WidgetType::Disabled);
     assert(transitink::parseWidgetTypeId("ttc_eta", widgetType));
     assert(widgetType == transitink::WidgetType::TtcEta);
+    assert(!transitink::parseWidgetTypeId("bus_eta", widgetType));
+    assert(!transitink::parseWidgetTypeId("gmb_eta", widgetType));
+    assert(!transitink::parseWidgetTypeId("mtr_eta", widgetType));
+    assert(!transitink::parseWidgetTypeId("journey_time", widgetType));
 
-    transitink::BusOperator busOperator;
-    assert(std::string(transitink::busOperatorId(transitink::BusOperator::Kmb)) == "kmb");
-    assert(std::string(transitink::busOperatorId(transitink::BusOperator::LongWin)) == "lwb");
-    assert(std::string(transitink::busOperatorId(transitink::BusOperator::Citybus)) == "ctb");
-    assert(transitink::parseBusOperatorId("lwb", busOperator));
-    assert(busOperator == transitink::BusOperator::LongWin);
-    assert(!transitink::parseBusOperatorId("unknown", busOperator));
-
-    transitink::RailMode railMode;
-    assert(std::string(transitink::railModeId(transitink::RailMode::HeavyRail)) == "heavy_rail");
-    assert(std::string(transitink::railModeId(transitink::RailMode::LightRail)) == "light_rail");
-    assert(transitink::parseRailModeId("light_rail", railMode));
-    assert(railMode == transitink::RailMode::LightRail);
-    assert(!transitink::parseRailModeId("unknown", railMode));
-
-    transitink::WidgetConfig busWidget;
-    busWidget.type = transitink::WidgetType::BusEta;
-    busWidget.bus.routeId = "268B";
-    busWidget.bus.directionId = "O";
-    busWidget.bus.serviceType = "1";
-    busWidget.bus.stopId = "STOP-A";
-    assert(transitink::isWidgetConfigValid(busWidget));
-
-    transitink::WidgetConfig gmbWidget;
-    gmbWidget.type = transitink::WidgetType::GmbEta;
-    gmbWidget.gmb.region = "HKI";
-    gmbWidget.gmb.routeCode = "69";
-    gmbWidget.gmb.routeId = "2000410";
-    gmbWidget.gmb.routeSeq = "1";
-    gmbWidget.gmb.stopId = "20003337";
-    gmbWidget.gmb.stopSeq = "1";
-    assert(transitink::isWidgetConfigValid(gmbWidget));
-    gmbWidget.gmb.region = "HK";
-    assert(!transitink::isWidgetConfigValid(gmbWidget));
-
-    transitink::WidgetConfig mtrWidget;
-    mtrWidget.type = transitink::WidgetType::MtrEta;
-    mtrWidget.mtr.lineOrRouteId = "TML";
-    mtrWidget.mtr.stationId = "YUL";
-    mtrWidget.mtr.directionId = "UP";
-    assert(transitink::isWidgetConfigValid(mtrWidget));
-
-    transitink::WidgetConfig journeyWidget;
-    journeyWidget.type = transitink::WidgetType::JourneyTime;
-    journeyWidget.journeyTime.locationId = "HOME";
-    journeyWidget.journeyTime.destinationId = "WORK";
-    assert(transitink::isWidgetConfigValid(journeyWidget));
-
-    transitink::WidgetConfig ttcWidget;
-    ttcWidget.type = transitink::WidgetType::TtcEta;
-    ttcWidget.ttc.routeId = "506";
-    ttcWidget.ttc.directionId = "0";
-    ttcWidget.ttc.stopId = "8431";
+    transitink::WidgetConfig ttcWidget = validTtcWidget();
     assert(transitink::isWidgetConfigValid(ttcWidget));
+
+    ttcWidget.ttc.routeId.clear();
+    assert(!transitink::isWidgetConfigValid(ttcWidget));
+    ttcWidget = validTtcWidget();
+    ttcWidget.ttc.directionId.clear();
+    assert(!transitink::isWidgetConfigValid(ttcWidget));
+    ttcWidget = validTtcWidget();
     ttcWidget.ttc.stopId.clear();
     assert(!transitink::isWidgetConfigValid(ttcWidget));
 
-    assert(transitink::isWidgetConfigValid(transitink::WidgetConfig{}));
+    ttcWidget = validTtcWidget();
+    ttcWidget.ttc.routeLabel.assign(transitink::kMaxConfigLabelBytes + 1, 'R');
+    assert(!transitink::isWidgetConfigValid(ttcWidget));
 
     return 0;
 }

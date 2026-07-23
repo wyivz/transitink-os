@@ -4,31 +4,16 @@
 
 #include "core/WidgetScheduler.h"
 
-class BusProvider;
-class GmbProvider;
-class JourneyTimeProvider;
-class LightRailProvider;
-class MtrProvider;
 class TtcProvider;
 
 class WidgetProviderRouter final : public transitink::IWidgetProviderRouter {
 public:
-    WidgetProviderRouter(BusProvider& bus,
-                         GmbProvider& gmb,
-                         MtrProvider& mtr,
-                         LightRailProvider& lightRail,
-                         JourneyTimeProvider& journey,
-                         TtcProvider& ttc);
+    explicit WidgetProviderRouter(TtcProvider& ttc);
 
     transitink::ProviderResult fetch(uint8_t slot,
                                      const transitink::WidgetConfig& config,
                                      int64_t nowEpoch) override;
 
 private:
-    BusProvider& bus_;
-    GmbProvider& gmb_;
-    MtrProvider& mtr_;
-    LightRailProvider& lightRail_;
-    JourneyTimeProvider& journey_;
     TtcProvider& ttc_;
 };

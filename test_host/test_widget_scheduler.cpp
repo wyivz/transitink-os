@@ -16,26 +16,22 @@ using transitink::WidgetSnapshot;
 using transitink::WidgetState;
 using transitink::WidgetType;
 
-WidgetConfig configFor(WidgetType type) {
+WidgetConfig ttcConfig(const std::string& route = "506") {
     WidgetConfig config;
-    config.type = type;
-    if (type == WidgetType::BusEta) {
-        config.bus.routeId = "11";
-        config.bus.directionId = "I";
-        config.bus.serviceType = "1";
-        config.bus.stopId = "STOP-A";
-    } else if (type == WidgetType::MtrEta) {
-        config.mtr.lineOrRouteId = "TML";
-        config.mtr.stationId = "YUL";
-        config.mtr.directionId = "UP";
-    } else if (type == WidgetType::JourneyTime) {
-        config.journeyTime.locationId = "H1";
-        config.journeyTime.destinationId = "K1";
-    }
+    config.type = WidgetType::TtcEta;
+    config.ttc.routeId = route;
+    config.ttc.directionId = "0";
+    config.ttc.stopId = "8431";
+    config.ttc.routeLabel = route;
+    config.ttc.stopLabel = "College St at University Ave";
+    config.ttc.destinationLabel = "Eastbound";
     return config;
 }
 
-ProviderResult ready(uint8_t slot, WidgetType type, int64_t fetchedAt, int64_t eventEpoch,
+ProviderResult ready(uint8_t slot,
+                     WidgetType type,
+                     int64_t fetchedAt,
+                     int64_t eventEpoch,
                      const std::string& text) {
     WidgetSnapshot snapshot;
     snapshot.slot = slot;
@@ -48,13 +44,15 @@ ProviderResult ready(uint8_t slot, WidgetType type, int64_t fetchedAt, int64_t e
     return {ProviderOutcome::Success, snapshot};
 }
 
-ProviderResult outcome(ProviderOutcome providerOutcome, uint8_t slot, WidgetType type,
+ProviderResult outcome(ProviderOutcome providerOutcome,
+                       uint8_t slot,
+                       WidgetType type,
                        const std::string& message = {}) {
     WidgetSnapshot snapshot;
     snapshot.slot = slot;
     snapshot.type = type;
-    snapshot.state = providerOutcome == ProviderOutcome::Empty ? WidgetState::Empty
-                                                                : WidgetState::Error;
+    snapshot.state =
+        providerOutcome == ProviderOutcome::Empty ? WidgetState::Empty : WidgetState::Error;
     snapshot.providerMessage = message;
     return {providerOutcome, snapshot};
 }
@@ -80,18 +78,15 @@ int main() {
     {
         FakeRouter router;
         WidgetSlots configs{};
-        configs[0] = configFor(WidgetType::BusEta);
-        configs[0].bus.routeLabelTc = "11";
-        configs[0].bus.destinationLabelTc = "往中環";
-        configs[0].bus.stopLabelTc = "海壩村 (TW515)";
+        configs[0] = ttcConfig();
 
         WidgetScheduler scheduler(router);
         scheduler.configure(configs, 500);
 
         const auto& placeholder = scheduler.snapshot(0);
-        assert(placeholder.type == WidgetType::BusEta);
-        assert(placeholder.title == "11 · 往中環");
-        assert(placeholder.subtitle == "海壩村");
+        assert(placeholder.type == WidgetType::TtcEta);
+        assert(placeholder.title == "506 · Eastbound");
+        assert(placeholder.subtitle == "College St at University Ave");
         assert(placeholder.fetchedAtEpoch == 0);
         assert(placeholder.valueCount == 0);
         assert(router.calls.empty());
@@ -100,12 +95,12 @@ int main() {
     {
         FakeRouter router;
         WidgetSlots configs{};
-        configs[0] = configFor(WidgetType::BusEta);
-        configs[1] = configFor(WidgetType::MtrEta);
-        configs[2] = configFor(WidgetType::JourneyTime);
-        router.scripted[0] = {ready(0, WidgetType::BusEta, 1000, 1300, "巴士")};
-        router.scripted[1] = {ready(1, WidgetType::MtrEta, 1000, 1300, "港鐵")};
-        router.scripted[2] = {ready(2, WidgetType::JourneyTime, 1000, 0, "24 分鐘")};
+        configs[0] = ttcConfig("501");
+        configs[1] = ttcConfig("504");
+        configs[2] = ttcConfig("506");
+        router.scripted[0] = {ready(0, WidgetType::TtcEta, 1000, 1300, "501")};
+        router.scripted[1] = {ready(1, WidgetType::TtcEta, 1000, 1300, "504")};
+        router.scripted[2] = {ready(2, WidgetType::TtcEta, 1000, 1300, "506")};
 
         WidgetScheduler scheduler(router);
         scheduler.configure(configs, 500);
@@ -114,32 +109,25 @@ int main() {
 
         const auto first = scheduler.serviceNextDue(500, 1000);
         assert(first.ran && first.slot == 0 && first.success);
-        assert(router.calls.size() == 1);
         const auto second = scheduler.serviceNextDue(500, 1000);
         assert(second.ran && second.slot == 1 && second.success);
-        assert(router.calls.size() == 2);
         const auto third = scheduler.serviceNextDue(500, 1000);
         assert(third.ran && third.slot == 2 && third.success);
-        assert(router.calls.size() == 3);
         assert(!scheduler.serviceNextDue(500, 1000).ran);
         assert((router.calls == std::vector<uint8_t>{0, 1, 2}));
         assert(!scheduler.hasPendingDue(500));
-        assert(!scheduler.hasPendingDue(500 + 29999));
+        assert(!scheduler.hasPendingDue(500 + 59999));
 
-        router.scripted[1].push_back(ready(1, WidgetType::MtrEta, 1030, 1330, "港鐵 2"));
-        assert(scheduler.hasPendingDue(500 + 30000));
-        const auto railDue = scheduler.serviceNextDue(500 + 30000, 1030);
-        assert(railDue.ran && railDue.slot == 1);
-
-        router.scripted[0].push_back(ready(0, WidgetType::BusEta, 1060, 1360, "巴士 2"));
-        router.scripted[1].push_back(ready(1, WidgetType::MtrEta, 1060, 1360, "港鐵 3"));
-        const auto fairBus = scheduler.serviceNextDue(500 + 60000, 1060);
-        const auto fairRail = scheduler.serviceNextDue(500 + 60000, 1060);
-        assert(fairBus.slot == 0);
-        assert(fairRail.slot == 1);
+        router.scripted[0].push_back(ready(0, WidgetType::TtcEta, 1060, 1360, "501 2"));
+        router.scripted[1].push_back(ready(1, WidgetType::TtcEta, 1060, 1360, "504 2"));
+        assert(scheduler.hasPendingDue(500 + 60000));
+        const auto due0 = scheduler.serviceNextDue(500 + 60000, 1060);
+        const auto due1 = scheduler.serviceNextDue(500 + 60000, 1060);
+        assert(due0.slot == 0);
+        assert(due1.slot == 1);
         assert(router.calls.back() == 1);
 
-        router.scripted[2].push_back(ready(2, WidgetType::JourneyTime, 1060, 0, "25 分鐘"));
+        router.scripted[2].push_back(ready(2, WidgetType::TtcEta, 1060, 1360, "506 2"));
         scheduler.forceAllDue(500 + 60000);
         const std::size_t before = router.calls.size();
         const auto forced = scheduler.serviceNextDue(500 + 60000, 1060);
@@ -151,13 +139,13 @@ int main() {
     {
         FakeRouter router;
         WidgetSlots configs{};
-        configs[0] = configFor(WidgetType::BusEta);
+        configs[0] = ttcConfig();
         router.scripted[0] = {
-            ready(0, WidgetType::BusEta, 1000, 2000, "原有班次"),
-            outcome(ProviderOutcome::Failure, 0, WidgetType::BusEta),
-            outcome(ProviderOutcome::Failure, 0, WidgetType::BusEta),
-            outcome(ProviderOutcome::Failure, 0, WidgetType::BusEta),
-            ready(0, WidgetType::BusEta, 1240, 2200, "恢復班次"),
+            ready(0, WidgetType::TtcEta, 1000, 2000, "last good"),
+            outcome(ProviderOutcome::Failure, 0, WidgetType::TtcEta),
+            outcome(ProviderOutcome::Failure, 0, WidgetType::TtcEta),
+            outcome(ProviderOutcome::Failure, 0, WidgetType::TtcEta),
+            ready(0, WidgetType::TtcEta, 1240, 2200, "recovered"),
         };
 
         WidgetScheduler scheduler(router);
@@ -169,14 +157,14 @@ int main() {
         assert(scheduler.snapshot(0).freshness == Freshness::Stale);
         assert(scheduler.snapshot(0).consecutiveFailures == 1);
         assert(scheduler.snapshot(0).valueCount == 1);
-        assert(scheduler.snapshot(0).values[0].text == "原有班次");
+        assert(scheduler.snapshot(0).values[0].text == "last good");
 
         scheduler.serviceNextDue(120100, 1120);
         assert(scheduler.snapshot(0).valueCount == 1);
         scheduler.serviceNextDue(180100, 1180);
         assert(scheduler.snapshot(0).valueCount == 0);
         assert(scheduler.snapshot(0).state == WidgetState::Error);
-        assert(scheduler.snapshot(0).providerMessage == "資料已逾期");
+        assert(scheduler.snapshot(0).providerMessage == "Data expired");
         assert(scheduler.snapshot(0).consecutiveFailures == 3);
 
         const auto recovered = scheduler.serviceNextDue(240100, 1240);
@@ -184,43 +172,40 @@ int main() {
         assert(scheduler.snapshot(0).freshness == Freshness::Fresh);
         assert(scheduler.snapshot(0).consecutiveFailures == 0);
         assert(scheduler.snapshot(0).valueCount == 1);
-        assert(scheduler.snapshot(0).values[0].text == "恢復班次");
+        assert(scheduler.snapshot(0).values[0].text == "recovered");
     }
 
     {
         FakeRouter router;
         WidgetSlots configs{};
-        configs[0] = configFor(WidgetType::BusEta);
-        configs[1] = configFor(WidgetType::BusEta);
-        router.scripted[0] = {
-            outcome(ProviderOutcome::Failure, 0, WidgetType::BusEta),
-        };
-        router.scripted[1] = {
-            ready(1, WidgetType::BusEta, 1000, 1300, "第二格"),
-        };
+        configs[0] = ttcConfig();
+        configs[1] = ttcConfig("504");
+        router.scripted[0] = {outcome(ProviderOutcome::Failure, 0, WidgetType::TtcEta)};
+        router.scripted[1] = {ready(1, WidgetType::TtcEta, 1000, 1300, "second")};
 
         WidgetScheduler scheduler(router);
         scheduler.configure(configs, 10);
         scheduler.serviceNextDue(10, 1000);
         assert(scheduler.snapshot(0).state == WidgetState::Error);
-        assert(scheduler.snapshot(0).providerMessage == "暫未能取得資料");
+        assert(scheduler.snapshot(0).providerMessage == "Unable to refresh");
         assert(scheduler.snapshot(0).valueCount == 0);
         assert(scheduler.snapshot(1).valueCount == 0);
         scheduler.serviceNextDue(10, 1000);
-        assert(scheduler.snapshot(1).values[0].text == "第二格");
-        assert(scheduler.snapshot(0).providerMessage == "暫未能取得資料");
+        assert(scheduler.snapshot(1).values[0].text == "second");
+        assert(scheduler.snapshot(0).providerMessage == "Unable to refresh");
     }
 
     {
         FakeRouter router;
         WidgetSlots configs{};
-        configs[0] = configFor(WidgetType::BusEta);
+        configs[0] = ttcConfig();
         router.scripted[0] = {
-            ready(0, WidgetType::BusEta, 1000, 2000, "舊資料"),
-            outcome(ProviderOutcome::InvalidConfig, 0, WidgetType::BusEta, "設定不完整"),
-            ready(0, WidgetType::BusEta, 1120, 2000, "新資料"),
-            outcome(ProviderOutcome::ClockUnsynced, 0, WidgetType::BusEta,
-                    "時間尚未同步"),
+            ready(0, WidgetType::TtcEta, 1000, 2000, "old"),
+            outcome(ProviderOutcome::InvalidConfig, 0, WidgetType::TtcEta,
+                    "Incomplete settings"),
+            ready(0, WidgetType::TtcEta, 1120, 2000, "new"),
+            outcome(ProviderOutcome::ClockUnsynced, 0, WidgetType::TtcEta,
+                    "Clock not synced"),
         };
 
         WidgetScheduler scheduler(router);
@@ -228,19 +213,19 @@ int main() {
         scheduler.serviceNextDue(0, 1000);
         scheduler.serviceNextDue(60000, 1060);
         assert(scheduler.snapshot(0).valueCount == 0);
-        assert(scheduler.snapshot(0).providerMessage == "設定不完整");
+        assert(scheduler.snapshot(0).providerMessage == "Incomplete settings");
         scheduler.serviceNextDue(120000, 1120);
         assert(scheduler.snapshot(0).valueCount == 1);
         scheduler.serviceNextDue(180000, 0);
         assert(scheduler.snapshot(0).valueCount == 0);
-        assert(scheduler.snapshot(0).providerMessage == "時間尚未同步");
+        assert(scheduler.snapshot(0).providerMessage == "Clock not synced");
     }
 
     {
         FakeRouter router;
         WidgetSlots configs{};
-        configs[0] = configFor(WidgetType::BusEta);
-        router.scripted[0] = {ready(0, WidgetType::BusEta, 1000, 1050, "快到期")};
+        configs[0] = ttcConfig();
+        router.scripted[0] = {ready(0, WidgetType::TtcEta, 1000, 1050, "expiring")};
         WidgetScheduler scheduler(router);
         scheduler.configure(configs, 0);
         scheduler.serviceNextDue(0, 1000);
@@ -249,21 +234,21 @@ int main() {
         const auto afterExpiry = scheduler.displaySnapshots(1050);
         assert(afterExpiry[0].valueCount == 0);
         assert(afterExpiry[0].state == WidgetState::Empty);
-        assert(afterExpiry[0].providerMessage == "暫無班次");
+        assert(afterExpiry[0].providerMessage == "No upcoming arrivals");
     }
 
     {
         FakeRouter router;
         WidgetSlots configs{};
-        configs[0] = configFor(WidgetType::BusEta);
-        router.scripted[0] = {ready(0, WidgetType::BusEta, 1000, 2000, "繞回")};
+        configs[0] = ttcConfig();
+        router.scripted[0] = {ready(0, WidgetType::TtcEta, 1000, 2000, "wrap")};
         WidgetScheduler scheduler(router);
         constexpr uint32_t configuredAt = 0xfffffff5U;
         scheduler.configure(configs, configuredAt);
         scheduler.serviceNextDue(configuredAt, 1000);
         assert(!scheduler.hasPendingDue(20));
         assert(!scheduler.hasPendingDue(59988));
-        router.scripted[0].push_back(ready(0, WidgetType::BusEta, 1060, 2030, "繞回 2"));
+        router.scripted[0].push_back(ready(0, WidgetType::TtcEta, 1060, 2030, "wrap 2"));
         assert(scheduler.hasPendingDue(59989));
         assert(scheduler.serviceNextDue(59989, 1060).ran);
     }
@@ -271,10 +256,10 @@ int main() {
     {
         FakeRouter router;
         WidgetSlots initial{};
-        initial[0] = configFor(WidgetType::BusEta);
-        initial[1] = configFor(WidgetType::MtrEta);
-        router.scripted[0] = {ready(0, WidgetType::BusEta, 1000, 1300, "舊巴士")};
-        router.scripted[1] = {ready(1, WidgetType::MtrEta, 1000, 1300, "舊港鐵")};
+        initial[0] = ttcConfig("501");
+        initial[1] = ttcConfig("504");
+        router.scripted[0] = {ready(0, WidgetType::TtcEta, 1000, 1300, "old 501")};
+        router.scripted[1] = {ready(1, WidgetType::TtcEta, 1000, 1300, "old 504")};
 
         WidgetScheduler scheduler(router);
         scheduler.configure(initial, 100);
@@ -284,23 +269,22 @@ int main() {
         assert(scheduler.snapshot(1).valueCount == 1);
 
         WidgetSlots reconfigured{};
-        reconfigured[1] = configFor(WidgetType::MtrEta);
-        reconfigured[1].mtr.stationId = "MKK";
+        reconfigured[1] = ttcConfig("506");
         const std::size_t callsBeforeReconfigure = router.calls.size();
         scheduler.configure(reconfigured, 500);
 
         assert(scheduler.snapshot(0).type == WidgetType::Disabled);
         assert(scheduler.snapshot(0).valueCount == 0);
-        assert(scheduler.snapshot(1).type == WidgetType::MtrEta);
+        assert(scheduler.snapshot(1).type == WidgetType::TtcEta);
         assert(scheduler.snapshot(1).valueCount == 0);
         assert(router.calls.size() == callsBeforeReconfigure);
         assert(!scheduler.hasPendingDue(499));
         assert(scheduler.hasPendingDue(500));
 
-        router.scripted[1].push_back(ready(1, WidgetType::MtrEta, 1001, 1400, "新港鐵"));
+        router.scripted[1].push_back(ready(1, WidgetType::TtcEta, 1001, 1400, "new 506"));
         const auto refreshed = scheduler.serviceNextDue(500, 1001);
         assert(refreshed.ran && refreshed.slot == 1);
-        assert(scheduler.snapshot(1).values[0].text == "新港鐵");
+        assert(scheduler.snapshot(1).values[0].text == "new 506");
     }
 
     {

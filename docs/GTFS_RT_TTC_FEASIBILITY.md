@@ -1,11 +1,20 @@
-# TransitInk OS 逻辑框架与 TTC GTFS-Realtime 可行性评估
+# TransitInk OS TTC GTFS-Realtime status and feasibility notes
+
+> **Current branch status (2026-07-23):** TransitInk OS is now a TTC-only
+> product. The firmware exposes only `Disabled` and `TtcEta` widget types, uses
+> the embedded `data/catalog/ttc/` catalog for route/stop selection, downloads
+> `https://bustime.ttc.ca/gtfsrt/trips`, and filters GTFS-Realtime Trip Updates
+> on-device by configured `route_id` and `stop_id`. The Hong Kong comparison
+> below is retained only as historical design context for the TTC conversion.
 
 本文档分析当前固件的领域分层与数据流，并评估改为（或增补）通用
 [GTFS-Realtime](https://gtfs.org/realtime/) 以适配
 [TTC GTFS-RT](https://open.toronto.ca/dataset/ttc-gtfs-realtime-gtfs-rt/)
 的可行性。评估基于仓库现状与 2026-07-23 对公开端点的实测。
 
-> **Implementation status (2026-07-23):** shipped on this branch as `WidgetType::TtcEta` — GitHub Actions refreshes `data/catalog/ttc/`, device downloads `bustime.ttc.ca/gtfsrt/trips` and filters by `stop_id`.
+> Older sections may still say "add" or "replace" because they record the
+> feasibility investigation. For this branch, those decisions have landed as the
+> TTC-only implementation described above.
 
 ## 0. 白话：要在这块硬件上做「和现在一样的到站屏」，该怎么做
 

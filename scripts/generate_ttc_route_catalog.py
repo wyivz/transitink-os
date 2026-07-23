@@ -211,9 +211,14 @@ def generate_cpp(payloads: dict[str, bytes], manifest: dict[str, Any]) -> tuple[
 #include <cstddef>
 #include <cstdint>
 
-#include "generated/TransitCatalogAssets.h"
-
 namespace transitink {
+
+struct EmbeddedCatalogAsset {
+    const char* path;
+    const uint8_t* data;
+    std::size_t size;
+    const char* sha256;
+};
 
 extern const char kEmbeddedTtcCatalogRevision[];
 extern const char kEmbeddedTtcCatalogGeneratedAt[];

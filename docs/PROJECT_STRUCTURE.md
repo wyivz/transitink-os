@@ -1,34 +1,33 @@
 # Project structure
 
 TransitInk OS keeps the standard PlatformIO source layout while separating
-hardware-independent behaviour from device and network integration. This is
-intentional: the pure C++ layer can be tested on a development machine without
-an ESP32 toolchain or connected device.
+hardware-independent behaviour from device and network integration. The current
+product is TTC-only: the live transit path is `TtcClient` -> `TtcProvider` ->
+`WidgetProviderRouter` -> `WidgetScheduler` -> `EInkDisplay`.
 
 ## Directory map
 
 ```text
 .
 ├── .github/workflows/           Continuous integration and release workflows
-├── data/catalog/                Checked-in gzip transport catalog baseline
+├── data/catalog/ttc/            Checked-in TTC Surface catalog baseline
 ├── include/                     Firmware headers
 │   ├── core/                    Hardware-independent domain interfaces
 │   ├── hardware/                Board profiles and display-driver selection
 │   └── providers/               Provider adapter interfaces
 ├── src/                         Production implementation
-│   ├── core/                    Parsing, validation, scheduling, and snapshots
+│   ├── core/                    GTFS-RT filtering, validation, scheduling, snapshots
 │   ├── hardware/                ESP32 buttons, wake support, and panel drivers
-│   ├── providers/               Bus, rail, and journey-time provider adapters
+│   ├── providers/               TTC provider adapter
 │   └── main.cpp                 Device lifecycle and application composition
-├── lib/yxml/                    Vendored XML parser and upstream licence
 ├── scripts/                     Developer and device-operation tools
 ├── installer/                   Static GitHub Pages installer source
-├── test_host/                   Native C++ tests, fixtures, and test shims
+├── test_host/                   Native C++ tests and test shims
 ├── test_native/                 PlatformIO Unity tests for production paths
 ├── tests/                       Python structural/integration tests
 ├── docs/                        Public technical documentation
 ├── platformio.ini               ESP32-S3 firmware environments
-├── platformio.native.ini        Native PlatformIO test environments
+├── platformio.native.ini        Native PlatformIO test environment
 ├── partitions.csv               16 MiB flash partition layout
 └── requirements-dev.txt         Pinned local Python tooling
 ```
@@ -39,8 +38,17 @@ an ESP32 toolchain or connected device.
 
 `src/main.cpp` owns boot, Wi-Fi connection, wake/sleep behaviour, the scheduler,
 display updates, configuration mode, and the top-level device lifecycle. It
-constructs the concrete clients and providers but should not contain provider
-parsing rules.
+constructs:
+
+- `TtcClient`
+- `TtcProvider`
+- `WidgetProviderRouter`
+- `transitink::WidgetScheduler`
+- `ConfigPortal(deviceConfig, configStore)`
+
+`main.cpp` should not contain GTFS-Realtime parsing rules. It also keeps a
+`WeatherSnapshot` so the dashboard footer layout remains stable, but the
+TTC-only product does not fetch remote weather.
 
 ### Hardware profiles and adapters
 
@@ -55,66 +63,57 @@ refresh policy. A board using the same controller only needs a new profile;
 another controller also needs a driver implementing the selected driver's
 `begin`, `show`, and `showPartialRegion` surface.
 
-The current dashboard renderer requires an exact 400×300 canvas. Supporting a
-different screen size requires a renderer/layout addition,
-not board-specific conditionals in the existing renderer.
+The current dashboard renderer requires an exact 400x300 canvas. Supporting a
+different screen size requires a renderer/layout addition, not board-specific
+conditionals in the existing renderer.
 
 ### Device and service integration
 
 The top level of `src/` contains the Arduino-facing implementation:
 
-- `EInkDisplay` and `HkGlyphFont` render the 400×300 user interface.
+- `EInkDisplay` and `HkGlyphFont` render the 400x300 user interface.
 - `BatteryMonitor` consumes the selected board's battery profile.
 - `ConfigStore`, `AppConfig`, `ConfigPortal`, `PortalConfigCodec`, and
-  `TransitInkPortalPage` own persistent settings and the local web portal.
-- `KmbClient`, `CitybusClient`, `GmbClient`, `MtrClient`, `LightRailClient`,
-  `JourneyTimeClient`, `TtcClient`, and `WeatherClient` perform remote data access.
-- `ConfigPortal` streams versioned gzip bus, Green Minibus, MTR, Light Rail,
-  and TTC assets directly from generated PROGMEM arrays without decompressing them in
-  ESP32 RAM. `WidgetCatalogService` owns compact journey-time projections and
-  the refreshed route index and per-route LittleFS stop overrides.
+  `TransitInkPortalPage` own persistent settings and the local English web
+  portal.
+- `TtcClient` performs the only live transit HTTPS request.
+- `ConfigPortal` streams the versioned gzip TTC catalog directly from generated
+  PROGMEM arrays without decompressing them in ESP32 RAM.
 
-### Frontend transport catalog
+### Frontend TTC catalog
 
-`scripts/generate_transit_route_catalog.py` is the maintainer path for bulk
-low-frequency official route and stop sources. It validates and deterministically
-generates `index.json.gz`, three provider stop packs, `rail.json.gz`, a manifest,
-and the C++ PROGMEM arrays under `src/generated/`. A normal firmware build reads
-the tracked output and performs no catalog downloads.
+`scripts/generate_ttc_route_catalog.py` is the maintainer path for the
+low-frequency TTC Surface GTFS source. It validates and deterministically
+generates:
 
-The portal loads the embedded index and rail assets alongside `/api/config`,
-loads a provider stop pack only when it is needed, then resolves route,
-direction and stop selections in the browser. Normal selection never calls an
-official route API. Journey-time locations remain small API projections, and
-live ETA clients are independent from this catalog path.
+- `data/catalog/ttc/index.json.gz`
+- `data/catalog/ttc/stops-ttc.json.gz`
+- `data/catalog/ttc/catalog-manifest.json`
+- `include/generated/TransitTtcCatalogAssets.h`
+- `src/generated/TransitTtcCatalogAssets.cpp`
 
-When a route or stop is absent, the user chooses "找不到站牌？更新所有路線" under
-"更新及省電". The device refreshes the complete KMB/Long Win, Citybus, and Green
-Minibus route indexes. Routes already used by the four widget drafts refresh
-their directions and stops in the same operation; another route refreshes and
-persists its detail the first time it is selected after the index update.
-`WidgetCatalogService` validates the responses and atomically replaces both the
-updated route index and route-specific LittleFS JSON overrides using temporary
-and backup files. The portal overlays those files on the firmware baseline on
-later visits. No catalog base URL, signing key, release server, or whole-catalog
-first-run download is required.
+The settings portal loads `/assets/catalog/current/ttc/index.json` alongside
+`/api/config`, then loads `/assets/catalog/current/ttc/stops-ttc.json` when a TTC
+stop list is needed. Route, direction, and stop selections resolve in the
+browser. Normal selection never calls an official route API and there is no
+runtime catalog service.
 
 ### Domain core
 
 `include/core/` and `src/core/` contain bounded parsing and business rules that
 do not depend on display or Wi-Fi hardware. This includes widget configuration,
-normalised snapshots, scheduling, portal request authentication, battery
-status, and journey-time XML parsing.
+normalised snapshots, scheduling, portal request authentication, battery status,
+and `GtfsRealtimeTripFilter`.
 
 New rules should go here when they can be expressed without Arduino APIs. This
 keeps them fast to compile and easy to exercise with strict host warnings.
 
-### Provider adapters
+### Provider adapter
 
-`src/providers/` converts bus, Green Minibus, rail, and journey-time responses into common widget
-snapshots. `WidgetProviderRouter` is the dispatch boundary used by
-`WidgetScheduler`; display code should consume snapshots instead of calling an
-operator client directly.
+`src/providers/TtcProvider.cpp` converts TTC records into common widget
+snapshots by calling `normalizeTtcSnapshot`. `WidgetProviderRouter` is the
+dispatch boundary used by `WidgetScheduler`; display code consumes snapshots
+instead of calling the TTC client directly.
 
 ## Test layers
 
@@ -122,7 +121,7 @@ The three test directories have distinct roles and should not be merged merely
 for naming consistency:
 
 - `test_host/` compiles pure C and C++ modules with the system compiler using
-  `-Wall -Wextra -Werror`. It also owns bounded external-response fixtures.
+  `-Wall -Wextra -Werror`.
 - `test_native/` uses PlatformIO's native Unity runner for production code that
   needs small Arduino or Preferences compatibility shims.
 - `tests/` contains Python tests that assert source boundaries, portal
@@ -142,16 +141,16 @@ The detailed board extension procedure is documented in
 
 These paths are deliberately excluded from Git:
 
-- `.venv/`, `.platformio/`, and `.pio/` — local tools, packages, and builds
-- `.catalog-cache/` — resumable official-source downloads used by the generator
-- `.test-build/` — native test executables and objects
-- `backups/` — full device flash images, which may contain credentials
-- `dist/` — generated release assets and deployable installer package
-- `.superpowers/` — local agent workspace
+- `.venv/`, `.platformio/`, and `.pio/` - local tools, packages, and builds
+- `.catalog-cache/` - resumable official-source downloads used by the generator
+- `.test-build/` - native test executables and objects
+- `backups/` - full device flash images, which may contain credentials
+- `dist/` - generated release assets and deployable installer package
+- `.superpowers/` - local agent workspace
 
-Tracked generated glyph and catalog C++ sources are required by the firmware
+Tracked generated glyph and TTC catalog C++ sources are required by the firmware
 build. Their generators, deterministic inputs, gzip assets, manifests and
-licensing boundaries live under `scripts/`, `data/catalog/`,
+licensing boundaries live under `scripts/`, `data/catalog/ttc/`,
 `THIRD_PARTY_NOTICES.md`, and `THIRD_PARTY_DATA.md`.
 
 ## Release and installer boundary

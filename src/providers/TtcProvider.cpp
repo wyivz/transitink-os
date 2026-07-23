@@ -19,7 +19,7 @@ transitink::ProviderResult TtcProvider::fetch(uint8_t slot,
         baseline.outcome = transitink::ProviderOutcome::Failure;
         baseline.snapshot.state = transitink::WidgetState::Error;
         baseline.snapshot.providerMessage =
-            error.length() == 0 ? "未能更新 TTC 到站時間" : error.c_str();
+            error.length() == 0 ? "Unable to refresh TTC arrivals" : error.c_str();
         return baseline;
     }
     return transitink::normalizeTtcSnapshot(slot, config, records, nowEpoch);

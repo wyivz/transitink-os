@@ -2,7 +2,7 @@
 
 #include <Arduino.h>
 
-#include "WeatherClient.h"
+#include "WeatherSnapshot.h"
 #include "core/WidgetCore.h"
 
 class EInkDisplay {

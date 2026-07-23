@@ -1,49 +1,9 @@
-#include "core/BusEtaCore.h"
 #include "core/BatteryStatus.h"
+#include "core/BusEtaCore.h"
 
 #include <cassert>
-#include <string>
-#include <vector>
-
-using bus_eta::EtaRecord;
-using bus_eta::RouteSelection;
 
 int main() {
-    assert(bus_eta::kmbRoutesUrl() == "https://data.etabus.gov.hk/v1/transport/kmb/route/");
-    assert(bus_eta::kmbRouteUrl("32M", "O", "1") ==
-           "https://data.etabus.gov.hk/v1/transport/kmb/route/32M/outbound/1");
-    assert(bus_eta::kmbRouteUrl("32M", "I", "1") ==
-           "https://data.etabus.gov.hk/v1/transport/kmb/route/32M/inbound/1");
-    assert(bus_eta::kmbStopsUrl() == "https://data.etabus.gov.hk/v1/transport/kmb/stop");
-    assert(bus_eta::kmbStopUrl("B15BDCDB640C46BC") ==
-           "https://data.etabus.gov.hk/v1/transport/kmb/stop/B15BDCDB640C46BC");
-    assert(bus_eta::kmbRouteStopsUrl("1A", "O", "1") ==
-           "https://data.etabus.gov.hk/v1/transport/kmb/route-stop/1A/outbound/1");
-    assert(bus_eta::kmbRouteStopsUrl("1A", "I", "1") ==
-           "https://data.etabus.gov.hk/v1/transport/kmb/route-stop/1A/inbound/1");
-    assert(bus_eta::kmbEtaUrl("18492910339410B1", "1", "1") ==
-           "https://data.etabus.gov.hk/v1/transport/kmb/eta/18492910339410B1/1/1");
-
-    const long now = bus_eta::parseHongKongIso("2026-07-06T19:10:00+08:00");
-    assert(bus_eta::parseHongKongIso("2026-07-06T19:15:00+08:00") - now == 300);
-    assert(bus_eta::formatCountdown(300) == "5 分鐘");
-    assert(bus_eta::formatCountdown(1) == "即將到站");
-    assert(bus_eta::formatCountdown(-30) == "即將到站");
-    assert(bus_eta::formatCountdown(bus_eta::NoEtaSeconds) == "暫無班次");
-
-    std::vector<EtaRecord> records = {
-        {"1", "I", "1", 2, "2026-07-06T19:20:00+08:00", "竹園邨", ""},
-        {"1", "O", "1", 2, "2026-07-06T19:35:00+08:00", "尖沙咀碼頭", "原定班次"},
-        {"1", "O", "1", 1, "2026-07-06T19:15:00+08:00", "尖沙咀碼頭", "原定班次"},
-    };
-    RouteSelection selection{"1", "O", "1", "18492910339410B1", "尖沙咀碼頭"};
-    const auto picked = bus_eta::selectEtas(records, selection, now, 2);
-    assert(picked.size() == 2);
-    assert(picked[0].etaSeq == 1);
-    assert(picked[0].countdownText == "5 分鐘");
-    assert(picked[1].etaSeq == 2);
-    assert(picked[1].countdownText == "25 分鐘");
-
     bus_eta::DualButtonHoldDetector resetDetector(5000);
     assert(!resetDetector.update(false, false, 1000));
     assert(!resetDetector.update(true, false, 2000));

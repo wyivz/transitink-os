@@ -3,14 +3,14 @@
 #include <algorithm>
 #include <initializer_list>
 #include <utility>
+#include <vector>
 
 namespace transitink {
 namespace {
 
-constexpr const char* kInvalidConfigMessage = "設定不完整";
-constexpr const char* kEmptyMessage = "暫無班次";
-constexpr const char* kClockUnsyncedMessage = "時間尚未同步";
-constexpr const char* kJourneyUnavailableMessage = "暫未能取得行車時間";
+constexpr const char* kInvalidConfigMessage = "Incomplete settings";
+constexpr const char* kEmptyMessage = "No upcoming arrivals";
+constexpr const char* kClockUnsyncedMessage = "Clock not synced";
 
 std::string joinNonEmpty(std::initializer_list<std::string> parts) {
     std::string result;
@@ -22,53 +22,11 @@ std::string joinNonEmpty(std::initializer_list<std::string> parts) {
     return result;
 }
 
-bool isStopCodeToken(const std::string& value) {
-    if (value.size() < 3 || value.size() > 32) return false;
-    bool hasDigit = false;
-    for (const unsigned char character : value) {
-        const bool isDigit = character >= '0' && character <= '9';
-        const bool isLetter = (character >= 'A' && character <= 'Z') ||
-                              (character >= 'a' && character <= 'z');
-        if (!isDigit && !isLetter && character != '-' && character != '_') return false;
-        hasDigit = hasDigit || isDigit;
-    }
-    return hasDigit;
-}
-
-std::string withoutTrailingStopCode(std::string label) {
-    const std::size_t lastContent = label.find_last_not_of(" \t\r\n");
-    if (lastContent == std::string::npos) return {};
-    label.resize(lastContent + 1);
-
-    std::size_t openPosition = std::string::npos;
-    std::size_t openSize = 0;
-    std::size_t closeSize = 0;
-    if (!label.empty() && label.back() == ')') {
-        openPosition = label.rfind('(');
-        openSize = 1;
-        closeSize = 1;
-    } else if (label.size() >= 3 && label.compare(label.size() - 3, 3, "）") == 0) {
-        openPosition = label.rfind("（");
-        openSize = 3;
-        closeSize = 3;
-    }
-    if (openPosition == std::string::npos) return label;
-
-    const std::size_t tokenStart = openPosition + openSize;
-    const std::string token = label.substr(tokenStart, label.size() - closeSize - tokenStart);
-    if (!isStopCodeToken(token)) return label;
-
-    label.resize(openPosition);
-    const std::size_t stationEnd = label.find_last_not_of(" \t\r\n");
-    if (stationEnd == std::string::npos) return {};
-    label.resize(stationEnd + 1);
-    return label;
-}
-
 std::string countdownText(int64_t eventEpoch, int64_t nowEpoch) {
     const int64_t seconds = eventEpoch - nowEpoch;
     const int64_t minutes = seconds / 60 + (seconds % 60 == 0 ? 0 : 1);
-    return std::to_string(minutes) + " 分鐘";
+    if (minutes <= 1) return "1 min";
+    return std::to_string(minutes) + " min";
 }
 
 WidgetSnapshot baseSnapshot(uint8_t slot,
@@ -122,60 +80,15 @@ void storeFirstTwo(WidgetSnapshot& snapshot, std::vector<WidgetValue>& values) {
     }
 }
 
-std::string journeyContext(int8_t colourId) {
-    switch (colourId) {
-        case 1:
-            return "交通擠塞";
-        case 2:
-            return "行車緩慢";
-        case 3:
-            return "交通暢順";
-        default:
-            return {};
-    }
-}
-
-bool busRecordMatches(const BusEtaRecord& record, const BusWidgetConfig& config) {
-    return record.operatorId == config.operatorId && record.routeId == config.routeId &&
-           record.directionId == config.directionId &&
-           (record.serviceType.empty() || record.serviceType == config.serviceType);
-}
-
-bool railRecordMatches(const RailArrivalRecord& record, const MtrWidgetConfig& config) {
-    return record.mode == config.mode && record.lineOrRouteId == config.lineOrRouteId &&
-           record.stationId == config.stationId && record.directionId == config.directionId;
-}
-
 }  // namespace
 
 WidgetSnapshot configuredWidgetSnapshot(uint8_t slot, const WidgetConfig& config) {
     WidgetSnapshot snapshot;
     snapshot.slot = slot;
     snapshot.type = config.type;
-
     switch (config.type) {
-        case WidgetType::BusEta:
-            snapshot.title = joinNonEmpty(
-                {config.bus.routeLabelTc, config.bus.destinationLabelTc});
-            snapshot.subtitle = displayStopLabelTc(config.bus.stopLabelTc);
-            break;
-        case WidgetType::GmbEta:
-            snapshot.title = joinNonEmpty(
-                {config.gmb.routeLabelTc, config.gmb.directionLabelTc});
-            snapshot.subtitle = config.gmb.stopLabelTc;
-            break;
-        case WidgetType::MtrEta:
-            snapshot.title = joinNonEmpty(
-                {config.mtr.lineOrRouteLabelTc, config.mtr.directionLabelTc});
-            snapshot.subtitle = config.mtr.stationLabelTc;
-            break;
-        case WidgetType::JourneyTime:
-            snapshot.title = config.journeyTime.locationLabelTc;
-            snapshot.subtitle = config.journeyTime.destinationLabelTc;
-            break;
         case WidgetType::TtcEta:
-            snapshot.title = joinNonEmpty(
-                {config.ttc.routeLabel, config.ttc.destinationLabel});
+            snapshot.title = joinNonEmpty({config.ttc.routeLabel, config.ttc.destinationLabel});
             snapshot.subtitle = config.ttc.stopLabel;
             break;
         case WidgetType::Disabled:
@@ -184,20 +97,8 @@ WidgetSnapshot configuredWidgetSnapshot(uint8_t slot, const WidgetConfig& config
     return snapshot;
 }
 
-std::string displayStopLabelTc(std::string label) {
-    return withoutTrailingStopCode(std::move(label));
-}
-
 uint32_t refreshIntervalMs(WidgetType type) {
     switch (type) {
-        case WidgetType::BusEta:
-            return 60000;
-        case WidgetType::GmbEta:
-            return 60000;
-        case WidgetType::MtrEta:
-            return 30000;
-        case WidgetType::JourneyTime:
-            return 120000;
         case WidgetType::TtcEta:
             return 60000;
         case WidgetType::Disabled:
@@ -208,14 +109,6 @@ uint32_t refreshIntervalMs(WidgetType type) {
 
 uint32_t staleWindowSeconds(WidgetType type) {
     switch (type) {
-        case WidgetType::BusEta:
-            return 180;
-        case WidgetType::GmbEta:
-            return 180;
-        case WidgetType::MtrEta:
-            return 90;
-        case WidgetType::JourneyTime:
-            return 360;
         case WidgetType::TtcEta:
             return 180;
         case WidgetType::Disabled:
@@ -240,152 +133,6 @@ void removeExpiredValues(WidgetSnapshot& snapshot, int64_t nowEpoch) {
         snapshot.values[index] = {};
     }
     snapshot.valueCount = writeIndex;
-}
-
-ProviderResult normalizeBusSnapshot(uint8_t slot,
-                                    const WidgetConfig& config,
-                                    const std::vector<BusEtaRecord>& records,
-                                    int64_t nowEpoch) {
-    if (config.type != WidgetType::BusEta || !isWidgetConfigValid(config)) {
-        return errorResult(slot, config, nowEpoch, ProviderOutcome::InvalidConfig,
-                           kInvalidConfigMessage);
-    }
-    if (nowEpoch <= 0) {
-        return errorResult(slot, config, nowEpoch, ProviderOutcome::ClockUnsynced,
-                           kClockUnsyncedMessage);
-    }
-
-    auto snapshot = baseSnapshot(slot, config, nowEpoch, nowEpoch);
-    std::vector<WidgetValue> values;
-    values.reserve(records.size());
-    for (const auto& record : records) {
-        if (record.cancelled || record.eventEpoch <= nowEpoch ||
-            !busRecordMatches(record, config.bus)) {
-            continue;
-        }
-        const std::string destination = record.destinationLabelTc.empty()
-                                            ? config.bus.destinationLabelTc
-                                            : record.destinationLabelTc;
-        appendUnique(values,
-                     {countdownText(record.eventEpoch, nowEpoch),
-                      joinNonEmpty({destination, record.remarkTc}), record.eventEpoch});
-    }
-    storeFirstTwo(snapshot, values);
-    if (snapshot.valueCount == 0) return emptyResult(std::move(snapshot));
-    snapshot.state = WidgetState::Ready;
-    return {ProviderOutcome::Success, std::move(snapshot)};
-}
-
-ProviderResult normalizeGmbSnapshot(uint8_t slot,
-                                    const WidgetConfig& config,
-                                    const GmbEtaPayload& payload,
-                                    int64_t nowEpoch) {
-    if (config.type != WidgetType::GmbEta || !isWidgetConfigValid(config)) {
-        return errorResult(slot, config, nowEpoch, ProviderOutcome::InvalidConfig,
-                           kInvalidConfigMessage);
-    }
-    if (nowEpoch <= 0) {
-        return errorResult(slot, config, nowEpoch, ProviderOutcome::ClockUnsynced,
-                           kClockUnsyncedMessage);
-    }
-
-    auto snapshot = baseSnapshot(slot, config, nowEpoch, nowEpoch);
-    if (!payload.enabled) {
-        return emptyResult(std::move(snapshot),
-                           payload.descriptionTc.empty() ? "到站預報暫停"
-                                                         : payload.descriptionTc);
-    }
-
-    std::vector<WidgetValue> values;
-    values.reserve(payload.records.size());
-    for (const auto& record : payload.records) {
-        if (record.diffMinutes < 0) continue;
-        const int64_t visibleMinutes = record.diffMinutes == 0 ? 1 : record.diffMinutes;
-        const int64_t eventEpoch = nowEpoch + visibleMinutes * 60;
-        appendUnique(values,
-                     {record.diffMinutes == 0
-                          ? "即將到站"
-                          : std::to_string(record.diffMinutes) + " 分鐘",
-                      record.remarkTc, eventEpoch});
-    }
-    storeFirstTwo(snapshot, values);
-    if (snapshot.valueCount == 0) return emptyResult(std::move(snapshot));
-    snapshot.state = WidgetState::Ready;
-    return {ProviderOutcome::Success, std::move(snapshot)};
-}
-
-ProviderResult normalizeRailSnapshot(uint8_t slot,
-                                     const WidgetConfig& config,
-                                     const std::vector<RailArrivalRecord>& records,
-                                     int64_t dataEpoch,
-                                     int64_t nowEpoch) {
-    if (config.type != WidgetType::MtrEta || !isWidgetConfigValid(config)) {
-        return errorResult(slot, config, nowEpoch, ProviderOutcome::InvalidConfig,
-                           kInvalidConfigMessage);
-    }
-    if (nowEpoch <= 0) {
-        return errorResult(slot, config, nowEpoch, ProviderOutcome::ClockUnsynced,
-                           kClockUnsyncedMessage);
-    }
-
-    auto snapshot = baseSnapshot(slot, config, nowEpoch, dataEpoch);
-    std::vector<WidgetValue> values;
-    values.reserve(records.size());
-    for (const auto& record : records) {
-        if (!record.valid || record.cancelled || record.eventEpoch <= nowEpoch ||
-            !railRecordMatches(record, config.mtr)) {
-            continue;
-        }
-        const std::string destination = record.destinationLabelTc.empty()
-                                            ? config.mtr.directionLabelTc
-                                            : record.destinationLabelTc;
-        appendUnique(values,
-                     {countdownText(record.eventEpoch, nowEpoch),
-                      joinNonEmpty(
-                          {destination, record.platformLabelTc, record.messageTc}),
-                      record.eventEpoch});
-    }
-    storeFirstTwo(snapshot, values);
-    if (snapshot.valueCount == 0) return emptyResult(std::move(snapshot));
-    snapshot.state = WidgetState::Ready;
-    return {ProviderOutcome::Success, std::move(snapshot)};
-}
-
-ProviderResult normalizeJourneyTimeSnapshot(uint8_t slot,
-                                            const WidgetConfig& config,
-                                            const JourneyTimeRecord& record,
-                                            int64_t nowEpoch) {
-    if (config.type != WidgetType::JourneyTime || !isWidgetConfigValid(config)) {
-        return errorResult(slot, config, nowEpoch, ProviderOutcome::InvalidConfig,
-                           kInvalidConfigMessage);
-    }
-
-    auto snapshot = baseSnapshot(slot, config, nowEpoch, record.dataEpoch);
-    if (!record.valid || record.locationId != config.journeyTime.locationId ||
-        record.destinationId != config.journeyTime.destinationId || record.dataEpoch <= 0) {
-        return emptyResult(std::move(snapshot));
-    }
-    if (record.valueKind == JourneyTimeValueKind::Unavailable) {
-        snapshot.state = WidgetState::Empty;
-        snapshot.providerMessage = kJourneyUnavailableMessage;
-        return {ProviderOutcome::Empty, std::move(snapshot)};
-    }
-    std::string valueText;
-    if (record.valueKind == JourneyTimeValueKind::Minutes) {
-        valueText = std::to_string(record.minutes) + " 分鐘";
-    } else if (record.statusCode == 1) {
-        valueText = "交通擠塞";
-    } else if (record.statusCode == 3) {
-        valueText = "隧道封閉";
-    } else {
-        snapshot.state = WidgetState::Empty;
-        snapshot.providerMessage = kJourneyUnavailableMessage;
-        return {ProviderOutcome::Empty, std::move(snapshot)};
-    }
-    snapshot.values[0] = {std::move(valueText), journeyContext(record.colourId), 0};
-    snapshot.valueCount = 1;
-    snapshot.state = WidgetState::Ready;
-    return {ProviderOutcome::Success, std::move(snapshot)};
 }
 
 ProviderResult normalizeTtcSnapshot(uint8_t slot,
