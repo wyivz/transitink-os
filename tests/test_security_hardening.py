@@ -53,8 +53,15 @@ class SecurityHardeningTests(unittest.TestCase):
         self.assertNotIn("271a8d937254b77c320f75121ada616ebc9219b0", catalog)
         self.assertNotIn("pull-requests: write", catalog)
         self.assertIn("contents: write", catalog)
+        self.assertIn(
+            "if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+            catalog,
+        )
+        self.assertIn("ref: ${{ github.event.repository.default_branch }}", catalog)
         self.assertIn("git commit", catalog)
-        self.assertIn("git push origin HEAD:main", catalog)
+        self.assertIn("git rebase", catalog)
+        self.assertIn('git push origin "HEAD:refs/heads/${DEFAULT_BRANCH}"', catalog)
+        self.assertNotIn("git push origin HEAD:main", catalog)
 
     def test_ci_scans_complete_history_with_checksum_verified_gitleaks(self):
         ci = read(".github/workflows/ci.yml")
