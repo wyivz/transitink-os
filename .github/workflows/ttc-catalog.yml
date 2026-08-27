@@ -10,12 +10,16 @@ permissions:
 
 jobs:
   refresh-ttc-catalog:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -31,7 +35,11 @@ jobs:
       # Default GITHUB_TOKEN cannot open PRs unless the repository enables
       # "Allow GitHub Actions to create and approve pull requests". Commit the
       # already-checked catalog directly so the weekly refresh can land.
+      # Only the default-branch workflow file is trusted to push, and the
+      # generated commit is rebased onto current default-branch HEAD.
       - name: Commit catalog refresh
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -44,4 +52,18 @@ jobs:
             exit 0
           fi
           git commit -m "chore: refresh TTC Surface GTFS stop catalog"
-          git push origin HEAD:main
+          for attempt in 1 2 3; do
+            git fetch origin "$DEFAULT_BRANCH"
+            if ! git rebase "origin/$DEFAULT_BRANCH"; then
+              git rebase --abort || true
+              echo "error: rebase onto origin/${DEFAULT_BRANCH} failed" >&2
+              exit 1
+            fi
+            if git push origin "HEAD:refs/heads/${DEFAULT_BRANCH}"; then
+              exit 0
+            fi
+            echo "Push rejected; retrying (${attempt}/3)" >&2
+            sleep 5
+          done
+          echo "error: failed to push catalog refresh after 3 attempts" >&2
+          exit 1
