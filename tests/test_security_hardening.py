@@ -47,6 +47,17 @@ class SecurityHardeningTests(unittest.TestCase):
         self.assertIn("attest-build-provenance@", release)
         self.assertIn("permissions: {}", release)
 
+    def test_ttc_catalog_workflow_pins_resolvable_create_pull_request(self):
+        catalog = read(".github/workflows/ttc-catalog.yml")
+        self.assertIn(
+            "peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1",
+            catalog,
+        )
+        self.assertNotIn(
+            "peter-evans/create-pull-request@271a8d937254b77c320f75121ada616ebc9219b0",
+            catalog,
+        )
+
     def test_ci_scans_complete_history_with_checksum_verified_gitleaks(self):
         ci = read(".github/workflows/ci.yml")
         self.assertNotIn("gitleaks/gitleaks-action", ci)
