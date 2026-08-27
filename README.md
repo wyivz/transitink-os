@@ -136,7 +136,8 @@ static GTFS zip. Maintainers refresh the reduced catalog with:
 .venv/bin/python scripts/generate_ttc_route_catalog.py --refresh
 ```
 
-There is also a scheduled workflow at `.github/workflows/ttc-catalog.yml`.
+There is also a scheduled workflow at `.github/workflows/ttc-catalog.yml`
+that commits a verified catalog refresh to `main`.
 
 ## Power behaviour
 

@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   refresh-ttc-catalog:
@@ -29,18 +28,20 @@ jobs:
       - name: Verify generated assets
         run: python3 scripts/generate_ttc_route_catalog.py --check
 
-      - name: Create pull request when catalog changed
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
-        with:
-          commit-message: "chore: refresh TTC Surface GTFS stop catalog"
-          title: "chore: refresh TTC Surface GTFS stop catalog"
-          body: |
-            Automated refresh of the reduced TTC Surface GTFS catalog used for
-            on-device stop selection. Live ETAs continue to come from
-            `bustime.ttc.ca/gtfsrt/trips` filtered by `stop_id` on the device.
-          branch: cursor/ttc-catalog-refresh
-          delete-branch: true
-          add-paths: |
-            data/catalog/ttc/**
-            include/generated/TransitTtcCatalogAssets.h
+      # Default GITHUB_TOKEN cannot open PRs unless the repository enables
+      # "Allow GitHub Actions to create and approve pull requests". Commit the
+      # already-checked catalog directly so the weekly refresh can land.
+      - name: Commit catalog refresh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            data/catalog/ttc \
+            include/generated/TransitTtcCatalogAssets.h \
             src/generated/TransitTtcCatalogAssets.cpp
+          if git diff --staged --quiet; then
+            echo "TTC catalog is already up to date"
+            exit 0
+          fi
+          git commit -m "chore: refresh TTC Surface GTFS stop catalog"
+          git push origin HEAD:main
