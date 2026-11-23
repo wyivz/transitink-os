@@ -1,12 +1,12 @@
 {
   "assets": {
     "index.json.gz": {
-      "bytes": 11452,
-      "sha256": "16f84d3bd7ad8a4af146cea52539d9b7006e4d3904271cd725e22bbbea95434f"
+      "bytes": 11453,
+      "sha256": "5bd7f2580243830c613bdec2887829bf4dc5140522c6b018c736325e1a39f78f"
     },
     "stops-ttc.json.gz": {
-      "bytes": 239366,
-      "sha256": "c058a975943a487a99dbfb261e54a99b92dc16563d0cc018e7cb30854e68b12a"
+      "bytes": 239365,
+      "sha256": "4df764fec88f45158824df712b5a43a02860c00752d6cfec6a39add6130ea03f"
     }
   },
   "counts": {
@@ -15,8 +15,8 @@
     "ttc_stop_refs": 16247,
     "ttc_stops": 9075
   },
-  "generated_at": "2026-11-16T15:58:12+00:00",
-  "revision": "f2396b557cf48be2",
+  "generated_at": "2026-11-23T18:22:22+00:00",
+  "revision": "87148dd2bb116a1a",
   "schema_version": 1,
   "source_url": "https://opendata.toronto.ca/toronto.transit.commission/ttc-routes-and-schedules/SurfaceGTFS.zip"
 }
